@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.env
+venv/
+
+# Django
+db.sqlite3
+*.log
+
+# Node
+node_modules/
+npm-debug.log
+yarn.lock
+
+# Build folders
+dist/
+build/
+*.spec
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
