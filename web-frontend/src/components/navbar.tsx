@@ -1,144 +1,89 @@
 import { Button } from "@heroui/button";
-import { Kbd } from "@heroui/kbd";
 import { Link } from "@heroui/link";
-import { Input } from "@heroui/input";
+
 import {
-  Navbar as HeroUINavbar,
+  Navbar,
   NavbarBrand,
   NavbarContent,
   NavbarItem,
-  NavbarMenuToggle,
-  NavbarMenu,
-  NavbarMenuItem,
 } from "@heroui/navbar";
-import { link as linkStyles } from "@heroui/theme";
-import clsx from "clsx";
 
-import { siteConfig } from "@/config/site";
-import { ThemeSwitch } from "@/components/theme-switch";
-import {
-  TwitterIcon,
-  GithubIcon,
-  DiscordIcon,
-  HeartFilledIcon,
-  SearchIcon,
-} from "@/components/icons";
-import { Logo } from "@/components/icons";
-
-export const Navbar = () => {
-  const searchInput = (
-    <Input
-      aria-label="Search"
-      classNames={{
-        inputWrapper: "bg-default-100",
-        input: "text-sm",
-      }}
-      endContent={
-        <Kbd className="hidden lg:inline-block" keys={["command"]}>
-          K
-        </Kbd>
-      }
-      labelPlacement="outside"
-      placeholder="Search..."
-      startContent={
-        <SearchIcon className="text-base text-default-400 pointer-events-none flex-shrink-0" />
-      }
-      type="search"
-    />
-  );
-
-  return (
-    <HeroUINavbar maxWidth="xl" position="sticky">
-      <NavbarContent className="basis-1/5 sm:basis-full" justify="start">
-        <NavbarBrand className="gap-3 max-w-fit">
-          <Link
-            className="flex justify-start items-center gap-1"
-            color="foreground"
-            href="/"
-          >
-            <Logo />
-            <p className="font-bold text-inherit">ACME</p>
-          </Link>
+import { Popover, PopoverTrigger, Avatar, PopoverContent, User, Divider } from "@heroui/react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ThemeSwitch } from "./theme-switch";
+export const CNavbar =() => {
+  const navigate = useNavigate();
+  const location = useLocation();
+   return <><Navbar isBordered maxWidth="xl" >
+        <NavbarBrand className="cursor-pointer" onClick={() => navigate("/dashboard")}>
+          <p className="font-bold text-inherit text-xl">🧪 ChemPFD</p>
         </NavbarBrand>
-        <div className="hidden lg:flex gap-4 justify-start ml-2">
-          {siteConfig.navItems.map((item) => (
-            <NavbarItem key={item.href}>
-              <Link
-                className={clsx(
-                  linkStyles({ color: "foreground" }),
-                  "data-[active=true]:text-primary data-[active=true]:font-medium",
-                )}
-                color="foreground"
-                href={item.href}
-              >
-                {item.label}
-              </Link>
-            </NavbarItem>
-          ))}
-        </div>
-      </NavbarContent>
 
-      <NavbarContent
-        className="hidden sm:flex basis-1/5 sm:basis-full"
-        justify="end"
-      >
-        <NavbarItem className="hidden sm:flex gap-2">
-          <Link isExternal href={siteConfig.links.twitter} title="Twitter">
-            <TwitterIcon className="text-default-500" />
-          </Link>
-          <Link isExternal href={siteConfig.links.discord} title="Discord">
-            <DiscordIcon className="text-default-500" />
-          </Link>
-          <Link isExternal href={siteConfig.links.github} title="GitHub">
-            <GithubIcon className="text-default-500" />
-          </Link>
-          <ThemeSwitch />
-        </NavbarItem>
-        <NavbarItem className="hidden lg:flex">{searchInput}</NavbarItem>
-        <NavbarItem className="hidden md:flex">
-          <Button
-            isExternal
-            as={Link}
-            className="text-sm font-normal text-default-600 bg-default-100"
-            href={siteConfig.links.sponsor}
-            startContent={<HeartFilledIcon className="text-danger" />}
-            variant="flat"
-          >
-            Sponsor
-          </Button>
-        </NavbarItem>
-      </NavbarContent>
+        <NavbarContent className="hidden sm:flex gap-4" justify="center">
+          <NavbarItem isActive={location.pathname === "/dashboard"}>
+            <Link color="foreground" href="/dashboard">Dashboard</Link>
+          </NavbarItem>
+          <NavbarItem isActive={location.pathname === "/components"}>
+            <Link color="foreground" href="/components">Components DB</Link>
+          </NavbarItem>
+        </NavbarContent>
 
-      <NavbarContent className="sm:hidden basis-1 pl-4" justify="end">
-        <Link isExternal href={siteConfig.links.github}>
-          <GithubIcon className="text-default-500" />
-        </Link>
-        <ThemeSwitch />
-        <NavbarMenuToggle />
-      </NavbarContent>
-
-      <NavbarMenu>
-        {searchInput}
-        <div className="mx-4 mt-2 flex flex-col gap-2">
-          {siteConfig.navMenuItems.map((item, index) => (
-            <NavbarMenuItem key={`${item}-${index}`}>
-              <Link
-                color={
-                  index === 2
-                    ? "primary"
-                    : index === siteConfig.navMenuItems.length - 1
-                      ? "danger"
-                      : "foreground"
-                }
-                href="#"
-                size="lg"
-              >
-                {item.label}
-              </Link>
-            </NavbarMenuItem>
-          ))}
-        </div>
-      </NavbarMenu>
-    </HeroUINavbar>
-  );
-};
+        <NavbarContent justify="end">
+          <NavbarItem>
+            <ThemeSwitch />
+          </NavbarItem>
+          <NavbarItem>
+            {/* Profile Popover */}
+            <Popover placement="bottom-end" showArrow={true}>
+              <PopoverTrigger>
+                <Avatar 
+                  isBordered 
+                  as="button" 
+                  className="transition-transform" 
+                  color="primary" 
+                  name="Name" 
+                  size="sm" 
+                  src="https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png" 
+                />
+              </PopoverTrigger>
+              <PopoverContent className="p-1 w-60">
+                <div className="px-1 py-2 w-full">
+                  <User
+                    name="Name"
+                    description=""
+                    classNames={{
+                        base: "gap-8",
+                        name: "text-default-800",
+                        description: "text-default-500",
+                    }}
+                    avatarProps={{
+                      src: "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
+                    }}
+                  />
+                </div>
+                <Divider />
+                <div className="flex flex-col gap-1 p-1">
+                  <Button size="sm" variant="light" className="justify-start">
+                    My Settings
+                  </Button>
+                  <Button size="sm" variant="light" className="justify-start">
+                    Help & Feedback
+                  </Button>
+                  <Divider className="my-1" />
+                  <Button 
+                    size="sm" 
+                    color="danger" 
+                    variant="flat" 
+                    className="justify-start"
+                    onPress={() => navigate("/login")}
+                  >
+                    Log Out
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </NavbarItem>
+        </NavbarContent>
+      </Navbar>
+      </>
+}
