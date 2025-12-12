@@ -67,6 +67,7 @@ class ComponentLibrary(QDockWidget):
         
         self.component_data = []
         self.icon_buttons = []
+        self.category_widgets = []
         
         self._setup_ui()
         self._load_components()
@@ -125,10 +126,30 @@ class ComponentLibrary(QDockWidget):
                 widget.deleteLater()
         
         self.icon_buttons.clear()
+        self.category_widgets.clear()
         
         grouped = {}
+        seen_components = set()
+        
         for component in self.component_data:
             parent = component['parent']
+            name = component['name']
+            
+            unique_key = (parent, name, component.get('object', ''))
+            
+            if unique_key in seen_components:
+                # If we've seen this exact combination, skip
+                continue
+            
+            # Additional check: If name is "Filter" in "Fittings", only allow one
+            if parent == "Fittings" and name == "Filter":
+                filter_key = ("Fittings", "Filter")
+                if filter_key in seen_components:
+                    continue
+                seen_components.add(filter_key)
+
+            seen_components.add(unique_key)
+            
             if parent not in grouped:
                 grouped[parent] = []
             grouped[parent].append(component)
@@ -143,7 +164,6 @@ class ComponentLibrary(QDockWidget):
                     border-radius: 3px;
                 }
             """)
-            self.scroll_layout.addWidget(category_label)
             
             grid_widget = QWidget()
             grid_layout = QGridLayout(grid_widget)
@@ -153,9 +173,10 @@ class ComponentLibrary(QDockWidget):
             
             row, col = 0, 0
             max_cols = 5
+            category_buttons = []
             
             for component in sorted(grouped[parent_name], key=lambda x: x['name']):
-                icon_path = self._get_icon_path(parent_name, component['name'])
+                icon_path = self._get_icon_path(parent_name, component['name'], component.get('object', ''))
                 
                 if os.path.exists(icon_path):
                     button = ComponentButton(component, icon_path)
@@ -163,24 +184,83 @@ class ComponentLibrary(QDockWidget):
                     button.setProperty('component_name', component['name'])
                     grid_layout.addWidget(button, row, col)
                     self.icon_buttons.append(button)
+                    category_buttons.append(button)
                     
                     col += 1
                     if col >= max_cols:
                         col = 0
                         row += 1
             
-            self.scroll_layout.addWidget(grid_widget)
+            if category_buttons:
+                self.scroll_layout.addWidget(category_label)
+                self.scroll_layout.addWidget(grid_widget)
+                self.category_widgets.append({
+                    'label': category_label,
+                    'grid': grid_widget,
+                    'buttons': category_buttons,
+                    'name': parent_name
+                })
     
-    def _get_icon_path(self, parent, name):
-        base_path = os.path.join("ui", "assets", "png", parent)
-        return os.path.join(base_path, f"{name}.png")
+    # Mappings for icon path resolution
+    FOLDER_MAP = {
+        "Furnance and Boilers": "Furnaces and Boilers",
+        "Storage Vessels/ Tanks": "Storage Vessels Tanks",
+        "Size Reduction Equipments": "Size Reduction Equipements"
+    }
+
+    NAME_CORRECTIONS = {
+        "/": ", ",  # "Reducer/Expander" → "Reducer, Expander"
+        "Furnance": "Furnace",  # Fix CSV typo
+        "Drier": "Dryer",  # British to American spelling
+        "Oil, Gas": "Oil Gas",  # Remove comma from compound name
+        "Centrifugal Pumps": "Centrifugal Pump",  # Singular
+        "Ejector (vapour service)": "Ejector(Vapor Service)",  # Match exact case
+        "Plates, Trays (For mass Transfer)": "Trays or plates",  # Process Vessels  
+        "Separators for Liquids, Decanters": "Separators for Liquids, Decanter"  # Separators
+    }
+
+    PREFIXED_COMPONENTS = {
+        'Exchanger905': "905Exchanger",
+        'KettleReboiler907': "907Kettle Reboiler"
+    }
+
+    def _get_icon_path(self, parent, name, obj=''):
+        folder = self.FOLDER_MAP.get(parent, parent)
+        
+        # Check for specific object override first
+        if obj in self.PREFIXED_COMPONENTS:
+            clean_name = self.PREFIXED_COMPONENTS[obj]
+        else:
+            clean_name = name
+            for old, new in self.NAME_CORRECTIONS.items():
+                clean_name = clean_name.replace(old, new)
+        
+        return os.path.join("ui", "assets", "png", folder, f"{clean_name}.png")
+
     
     def _filter_icons(self, search_text):
         search_text = search_text.lower()
         
-        for button in self.icon_buttons:
-            category = button.property('category').lower()
-            component = button.property('component_name').lower()
+        if not search_text:
+            for category in self.category_widgets:
+                category['label'].setVisible(True)
+                category['grid'].setVisible(True)
+                for button in category['buttons']:
+                    button.setVisible(True)
+            return
+        
+        for category in self.category_widgets:
+            has_match = False
             
-            matches = search_text in component or search_text in category
-            button.setVisible(matches)
+            for button in category['buttons']:
+                component = button.property('component_name').lower()
+                category_name = button.property('category').lower()
+                
+                matches = search_text in component or search_text in category_name
+                button.setVisible(matches)
+                
+                if matches:
+                    has_match = True
+            
+            category['label'].setVisible(has_match)
+            category['grid'].setVisible(has_match)
