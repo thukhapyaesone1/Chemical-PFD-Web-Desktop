@@ -1,4 +1,4 @@
-# Chemical PFD Django Backend API
+# Django API Project
 
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 [![Django](https://img.shields.io/badge/django-4.2-green.svg)](https://www.djangoproject.com/)
