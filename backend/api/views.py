@@ -74,7 +74,7 @@ class ComponentListView(generics.ListCreateAPIView):
         component = serializer.save()
 
         return Response(
-            {"component": serializer.data},
+            serializer.data,
             status=status.HTTP_201_CREATED
         )
 
@@ -133,13 +133,12 @@ class ProjectDetailView(generics.RetrieveUpdateAPIView):
         ).select_related("component")
 
         pc_serializer = ProjectComponentSerializer(project_components, many=True)
+        project_data = serializer.data
+        project_data["components"] = pc_serializer.data
 
         return Response({
             "status": "success",
-            "project": {
-                "details": serializer.data,
-                "components": pc_serializer.data
-            }
+            "project": project_data
         }, status=status.HTTP_200_OK)
 
     def update(self, request, *args, **kwargs):
@@ -152,8 +151,35 @@ class ProjectDetailView(generics.RetrieveUpdateAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
+        components = request.data.get("components", [])
+        for component_data in components:
+            component_id = component_data.get("component_id")
+            component_unique_id = component_data.get("component_unique_id")
+            connections = component_data.get("connections", {})
+
+            if not component_id or not component_unique_id:
+                continue
+
+            project_component, created = ProjectComponent.objects.update_or_create(
+                project=project,
+                component_id=component_id,
+                defaults={
+                    "component_unique_id": component_unique_id,
+                    "connections": connections
+                }
+            )
+        project.refresh_from_db()
+
+        project_components = ProjectComponent.objects.filter(
+            project=project
+        ).select_related("component")
+
+        pc_serializer = ProjectComponentSerializer(project_components, many=True)
+        project_data = serializer.data
+        project_data["components"] = pc_serializer.data
+
         return Response({
             "status": "success",
             "message": "Project updated successfully",
-            "project": serializer.data
+            "project": project_data
         }, status=status.HTTP_200_OK)
