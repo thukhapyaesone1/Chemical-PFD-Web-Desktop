@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { Stage, Layer } from "react-konva";
+import Konva from "konva";
 import { Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Tooltip } from "@heroui/react";
 import { SearchIcon } from "@/components/icons";
 import { ComponentsConfig, componentsConfig } from "@/assets/config/items";
@@ -29,6 +31,16 @@ export default function Editor() {
   const [droppedItems, setDroppedItems] = useState<CanvasItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Canvas Viewport State
+  const [stageScale, setStageScale] = useState(1);
+  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+
+  // Refs
+  const stageRef = useRef<Konva.Stage>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragItemRef = useRef<ComponentItem | null>(null);
 
   useEffect(() => {
     setComponents(componentsConfig);
@@ -48,15 +60,13 @@ export default function Editor() {
   }, {});
 
   const handleDragStart = (e: React.DragEvent, item: ComponentItem) => {
-    e.dataTransfer.setData("component", JSON.stringify(item));
+    dragItemRef.current = item;
     
+    // Set drag image (ghost)
     if (item.svg) {
       const img = new Image();
       img.src = item.svg;
-      img.width = 80;
-      img.height = 80;
-      
-      // Create canvas with white background for drag preview
+      // White background for drag preview
       const canvas = document.createElement('canvas');
       canvas.width = 80;
       canvas.height = 80;
@@ -68,47 +78,69 @@ export default function Editor() {
           ctx.drawImage(img, 0, 0, 80, 80);
           e.dataTransfer.setDragImage(canvas, 40, 40);
         };
-      } else {
-        e.dataTransfer.setDragImage(img, 40, 40);
       }
     }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    const stage = stageRef.current;
     
-    const componentData = e.dataTransfer.getData("component");
-    if (!componentData) return;
-    
-    const item = JSON.parse(componentData) as ComponentItem;
-    
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left - 40;
-    const y = e.clientY - rect.top - 40;
-    
-    const newCanvasItem: CanvasItem = {
-      ...item,
-      id: Date.now(),
-      x,
-      y,
-      width: 80,
-      height: 80
-    };
-    
-    setDroppedItems(prev => [...prev, newCanvasItem]);
-    setSelectedItemId(newCanvasItem.id);
+    // If we dropped a sidebar item
+    if (dragItemRef.current && stage) {
+      stage.setPointersPositions(e);
+      const pointer = stage.getRelativePointerPosition();
+      
+      if (pointer) {
+        const newItem: CanvasItem = {
+          ...dragItemRef.current,
+          id: Date.now(),
+          x: pointer.x - 40, // Center based on 80px width
+          y: pointer.y - 40,
+          width: 80,
+          height: 80,
+          rotation: 0
+        };
+        
+        setDroppedItems(prev => [...prev, newItem]);
+        setSelectedItemId(newItem.id);
+      }
+      dragItemRef.current = null;
+    }
   };
 
-  const handleItemMove = (itemId: number, newX: number, newY: number) => {
-    setDroppedItems(prev =>
-      prev.map(item =>
-        item.id === itemId ? { ...item, x: newX, y: newY } : item
-      )
-    );
-  };
+  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
+    const stage = stageRef.current;
+    if (!stage) return;
 
-  const handleItemClick = (itemId: number) => {
-    setSelectedItemId(itemId);
+    if (e.evt.ctrlKey) {
+      // Zoom logic
+      const scaleBy = 1.05;
+      const oldScale = stage.scaleX();
+      const pointer = stage.getPointerPosition();
+
+      if (!pointer) return;
+
+      const mousePointTo = {
+        x: (pointer.x - stage.x()) / oldScale,
+        y: (pointer.y - stage.y()) / oldScale,
+      };
+
+      const newScale = e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy;
+
+      setStageScale(newScale);
+      setStagePos({
+        x: pointer.x - mousePointTo.x * newScale,
+        y: pointer.y - mousePointTo.y * newScale,
+      });
+    } else {
+      // Pan logic
+      setStagePos(prev => ({
+        x: prev.x - e.evt.deltaX,
+        y: prev.y - e.evt.deltaY
+      }));
+    }
   };
 
   const handleDeleteItem = (itemId: number) => {
@@ -118,12 +150,26 @@ export default function Editor() {
     }
   };
 
-  const selectedItem = droppedItems.find(item => item.id === selectedItemId);
+  const handleUpdateItem = (itemId: number, updates: Partial<CanvasItem>) => {
+    setDroppedItems(prev => 
+      prev.map(item => 
+        item.id === itemId ? { ...item, ...updates } : item
+      )
+    );
+  };
+
+  const handleSelectItem = (itemId: number) => {
+    setSelectedItemId(itemId);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedItemId(null);
+  };
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
-      {/* Header bar - dark theme enabled */}
-      <div className="h-14 border-b flex items-center px-4 justify-between bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
+      {/* Header Bar - Preserved */}
+      <div className="h-14 border-b flex items-center px-4 justify-between bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 z-10">
         <div className="flex items-center gap-2">
           <Tooltip content="Back to Dashboard">
             <Button 
@@ -154,6 +200,9 @@ export default function Editor() {
               <DropdownItem key="redo">Redo (Ctrl+Y)</DropdownItem>
               <DropdownItem key="delete" onPress={() => selectedItemId && handleDeleteItem(selectedItemId)}>
                 Delete Selected (Del)
+              </DropdownItem>
+              <DropdownItem key="clear" onPress={handleClearSelection}>
+                Clear Selection
               </DropdownItem>
             </DropdownMenu>
           </Dropdown>
@@ -273,193 +322,114 @@ export default function Editor() {
 </div>
         </div>
         
-        {/* CANVAS AREA - ALWAYS WHITE (no dark theme classes) */}
+        {/* Canvas Area - Konva */}
         <div
-          className="flex-1 relative overflow-auto bg-white"
+          className="flex-1 relative overflow-hidden bg-white"
+          ref={containerRef}
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
-          style={{ position: 'relative' }}
         >
-          {/* Grid background - white canvas only */}
+          {/* CSS Grid Background */}
           <div 
             className="absolute inset-0 pointer-events-none" 
             style={{ 
-              backgroundImage: 'radial-gradient(#999 1px, transparent 1px)', 
-              backgroundSize: '20px 20px',
-              opacity: '0.15'
+              backgroundImage: 'radial-gradient(#9ca3af 1px, transparent 1px)', 
+              backgroundSize: `${20 * stageScale}px ${20 * stageScale}px`,
+              backgroundPosition: `${stagePos.x}px ${stagePos.y}px`,
+              opacity: 0.3
             }} 
           />
           
-          {/* Dropped items - ALWAYS WHITE */}
-          {droppedItems.map((item) => (
-            <div
-              key={item.id}
-              className={`absolute cursor-move bg-white rounded-lg shadow-md border border-gray-200 ${
-                selectedItemId === item.id ? 'ring-2 ring-blue-500 shadow-lg' : ''
-              }`}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width,
-                height: item.height,
-              }}
-              draggable
-              onClick={() => handleItemClick(item.id)}
-              onDragStart={(e) => {
-                e.dataTransfer.setData("move", JSON.stringify(item));
-                
-                // Create white background drag preview
-                if (item.svg) {
-                  const img = new Image();
-                  img.src = item.svg;
-                  img.width = 80;
-                  img.height = 80;
-                  
-                  const canvas = document.createElement('canvas');
-                  canvas.width = 80;
-                  canvas.height = 80;
-                  const ctx = canvas.getContext('2d');
-                  if (ctx) {
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(0, 0, 80, 80);
-                    img.onload = () => {
-                      ctx.drawImage(img, 0, 0, 80, 80);
-                      e.dataTransfer.setDragImage(canvas, 40, 40);
-                    };
-                  }
-                }
-              }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const movedItem = JSON.parse(e.dataTransfer.getData("move"));
-                if (movedItem.id === item.id) {
-                  const rect = e.currentTarget.parentElement!.getBoundingClientRect();
-                  const newX = e.clientX - rect.left - 40;
-                  const newY = e.clientY - rect.top - 40;
-                  handleItemMove(item.id, newX, newY);
-                }
-              }}
-            >
-              <div className="w-full h-full p-2">
-                <img 
-                  src={item.svg} 
-                  alt={item.name} 
-                  className="w-full h-full object-contain pointer-events-none"
-                  draggable="false"
-                  onError={(e) => {
-                    e.currentTarget.src = item.icon;
+          <Stage
+            width={window.innerWidth - (64 + 72 + 16)} // 64(left) + 72(right) + 16(padding)
+            height={window.innerHeight - 56}
+            scaleX={stageScale}
+            scaleY={stageScale}
+            x={stagePos.x}
+            y={stagePos.y}
+            draggable
+            onWheel={handleWheel}
+            ref={stageRef}
+            onMouseDown={(e) => {
+              // Click on stage deselects
+              const clickedOnEmpty = e.target === e.target.getStage();
+              if (clickedOnEmpty) {
+                handleClearSelection();
+              }
+            }}
+            onMouseMove={() => {
+              const stage = stageRef.current;
+              if (stage) {
+                const pointer = stage.getRelativePointerPosition();
+                if(pointer) setCursorPos({ x: Math.round(pointer.x), y: Math.round(pointer.y) });
+              }
+            }}
+            onDragEnd={(e) => {
+               // Update stage position state when panning finishes
+               if(e.target === stageRef.current) {
+                   setStagePos({ x: e.target.x(), y: e.target.y() });
+               }
+            }}
+          >
+            <Layer>
+              {droppedItems.map((item) => (
+                <CanvasItemImage
+                  key={item.id}
+                  item={item}
+                  isSelected={item.id === selectedItemId}
+                  onSelect={() => handleSelectItem(item.id)}
+                  onChange={(newAttrs) => {
+                    setDroppedItems(prev => 
+                      prev.map(i => i.id === newAttrs.id ? newAttrs : i)
+                    );
                   }}
                 />
-              </div>
-            </div>
-          ))}
+              ))}
+            </Layer>
+          </Stage>
+
+          {/* Independent Floating Bubble */}
+          <div className="absolute bottom-6 right-[45%] flex flex-col items-end gap-2 pointer-events-none">
+             {/* Coordinate Bubble */}
+             <div className="flex items-center gap-3 px-4 py-2 bg-white/90 dark:bg-[#1f2938]  backdrop-blur shadow-lg border border-gray-200 rounded-full text-xs font-mono text-gray-600 pointer-events-auto">
+                <div className="flex gap-2 dark:text-gray-200">
+                    <span className="font-bold text-gray-400">X</span> {cursorPos.x}
+                </div>
+                <div className="w-px h-3 bg-gray-400"></div>
+                <div className="flex gap-2 dark:text-gray-200">
+                    <span className="font-bold text-gray-400">Y</span> {cursorPos.y}
+                </div>
+                <div className="w-px h-3 bg-gray-300"></div>
+                <div className="font-semibold text-blue-600">
+                    {Math.round(stageScale * 100)}%
+                </div>
+             </div>
+
+             {/* Help Bubble */}
+             
+          </div>
           
-          {/* Empty canvas message - white background */}
+          {/* Empty State Overlay */}
           {droppedItems.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center p-8 bg-white rounded-lg border border-gray-300 shadow-lg">
-                <div className="font-medium mb-2 text-gray-800">Drag and drop components here</div>
-                <div className="text-sm text-gray-600">Components from the sidebar will appear as SVG icons</div>
-                <div className="mt-2 text-xs text-gray-500">Click to select, drag to move</div>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-center p-6 bg-white/80 backdrop-blur rounded-xl border border-gray-200 shadow-sm">
+                <div className="text-gray-500 font-medium">Canvas Empty</div>
+                <div className="text-xs text-gray-400 mt-1">Drag components from the sidebar</div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Properties sidebar - dark theme enabled */}
-        <div className="w-72 border-l p-4 hidden lg:block overflow-y-auto bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-          <h3 className="font-bold text-sm mb-4 text-gray-800 dark:text-gray-200">Properties</h3>
-          
-          {!selectedItem ? (
-            <div className="text-sm text-gray-600 dark:text-gray-300">
-              {droppedItems.length === 0 
-                ? "No items on canvas. Drag components from the sidebar." 
-                : "Click on any component to view its properties"}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Selected item info */}
-              <div className="border rounded-lg p-4 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white rounded p-1 flex items-center justify-center border border-gray-200">
-                      <img src={selectedItem.svg} alt={selectedItem.name} className="w-8 h-8 object-contain" />
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-800 dark:text-gray-200">{selectedItem.name}</h4>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">{selectedItem.class}</div>
-                    </div>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    variant="light"
-                    onPress={() => handleDeleteItem(selectedItem.id)}
-                    className="text-red-600 dark:text-red-400"
-                  >
-                    Delete
-                  </Button>
-                </div>
-                
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs block mb-1 text-gray-600 dark:text-gray-400">Position</label>
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <div className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-                          X: {Math.round(selectedItem.x)}px
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-                          Y: {Math.round(selectedItem.y)}px
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="text-xs block mb-1 text-gray-600 dark:text-gray-400">Size</label>
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <div className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-                          Width: {selectedItem.width}px
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-                          Height: {selectedItem.height}px
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="text-xs block mb-1 text-gray-600 dark:text-gray-400">Component Type</label>
-                    <div className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-                      {selectedItem.object}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Canvas stats */}
-              <div className="border rounded-lg p-4 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                <h4 className="font-medium text-sm mb-2 text-gray-800 dark:text-gray-200">Canvas Statistics</h4>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between text-gray-700 dark:text-gray-300">
-                    <span>Total Items:</span>
-                    <span>{droppedItems.length}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-700 dark:text-gray-300">
-                    <span>Selected Item ID:</span>
-                    <span>{selectedItem.id}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Right Sidebar - Canvas Properties/Items List */}
+        <CanvasPropertiesSidebar
+          items={droppedItems}
+          selectedItemId={selectedItemId}
+          onSelectItem={handleSelectItem}
+          onDeleteItem={handleDeleteItem}
+          onUpdateItem={handleUpdateItem}
+          className="hidden lg:flex"
+          showAllItemsByDefault={true}
+        />
       </div>
     </div>
   );

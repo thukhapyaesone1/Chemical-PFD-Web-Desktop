@@ -26,3 +26,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+#Image
+.svg
+.png
