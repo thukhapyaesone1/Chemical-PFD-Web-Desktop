@@ -365,11 +365,28 @@ export default function Editor() {
     // In manual mode we don't auto-cancel on mouse up; user either clicks
     // empty canvas to add waypoints or a grip to finish the connection.
   };
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+
+    useEffect(() => {
+      if (!containerRef.current) return;
+
+      const resizeObserver = new ResizeObserver(entries => {
+        const rect = entries[0].contentRect;
+        setStageSize({
+          width: rect.width,
+          height: rect.height,
+        });
+      });
+
+      resizeObserver.observe(containerRef.current);
+      return () => resizeObserver.disconnect();
+    }, []);
+
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+  <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       {/* Header Bar */}
-      <div className="h-14 border-b flex items-center px-4 justify-between bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 z-10">
+    <div className="h-14 shrink-0 border-b flex items-center px-4 justify-between bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 z-10">
         <div className="flex items-center gap-2">
           <Tooltip content="Back to Dashboard">
             <Button
@@ -434,21 +451,24 @@ export default function Editor() {
       </div>
 
       {/* Main workspace */}
-      <div className="flex-1 flex overflow-hidden">
+    <div className="flex-1 grid grid-cols-[256px_minmax(0,1fr)_288px] overflow-hidden">
         {/* Left Sidebar - Component Library */}
+        <div className="overflow-hidden">
         <ComponentLibrarySidebar
           components={components}
           onDragStart={handleDragStart}
           onSearch={setSearchQuery}
           initialSearchQuery={searchQuery}
         />
+      </div>
+
 
         {/* Canvas Area - Konva */}
         <div
-          className="flex-1 relative overflow-hidden bg-white"
-          ref={containerRef}
-          onDrop={handleDrop}
-          onDragOver={(e) => e.preventDefault()}
+        ref={containerRef}
+        className="relative min-w-0 overflow-hidden bg-white"
+        onDrop={handleDrop}
+        onDragOver={(e) => e.preventDefault()}
         >
           {/* CSS Grid Background */}
           <div
@@ -462,8 +482,8 @@ export default function Editor() {
           />
 
           <Stage
-            width={window.innerWidth - (64 + 72 + 16)} // 64(left) + 72(right) + 16(padding)
-            height={window.innerHeight - 56}
+            width={stageSize.width}
+            height={stageSize.height}
             scaleX={stageScale}
             scaleY={stageScale}
             x={stagePos.x}
@@ -471,6 +491,7 @@ export default function Editor() {
             draggable
             onWheel={handleWheel}
             ref={stageRef}
+            className="flex relative"
             onMouseDown={(e) => {
               const clickedOnEmpty = e.target === e.target.getStage();
 
@@ -574,68 +595,68 @@ export default function Editor() {
           </Stage>
 
           {/* Floating Info Bubble */}
-          <div className="absolute bottom-6 right-[45%] flex flex-col items-end gap-2 pointer-events-none">
-  <div className="flex items-center gap-3 px-4 py-2 bg-white/90 dark:bg-[#1f2938] backdrop-blur shadow-lg border border-gray-200 rounded-full text-xs font-mono text-gray-600 pointer-events-auto">
-    {/* XY Coordinates */}
-    <div className="flex gap-2 dark:text-gray-200">
-      <span className="font-bold text-gray-400">X</span> {cursorPos.x}
-    </div>
-    <div className="w-px h-3 bg-gray-400"></div>
-    <div className="flex gap-2 dark:text-gray-200">
-      <span className="font-bold text-gray-400">Y</span> {cursorPos.y}
-    </div>
-    
-    
-    <div className="w-px h-3 bg-gray-300"></div>
-    
-{/* Zoom Controls */}
-<div className="flex items-center gap-2">
-  {/* Zoom Out Button */}
-  <button
-    onClick={handleZoomOut}
-    disabled={stageScale <= 0.1}
-    className="w-8 h-8 flex items-center justify-center rounded-full
-      bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700
-      border border-gray-300 dark:border-gray-600
-      shadow-sm hover:shadow
-      disabled:opacity-40 disabled:cursor-not-allowed
-      transition-all duration-200"
-    title="Zoom Out"
-  >
-    <MdZoomOut className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-  </button>
-  
-  {/* Zoom Percentage Display & Reset */}
-  <div className="flex items-center">
-    {/* Percentage Display */}
-    <div className="px-3 py-1.5 text-sm font-medium
-      bg-gray-50 dark:bg-gray-800 
-      rounded-l-md
-      text-gray-700 dark:text-gray-300">
-      {Math.round(stageScale * 100)}%
-    </div>
-    
-    {/* Reset Button */}
-    
-  </div>
-  
-  {/* Zoom In Button */}
-  <button
-    onClick={handleZoomIn}
-    disabled={stageScale >= 3}
-    className="w-8 h-8 flex items-center justify-center rounded-full
-      bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700
-      border border-gray-300 dark:border-gray-600
-      shadow-sm hover:shadow
-      disabled:opacity-40 disabled:cursor-not-allowed
-      transition-all duration-200"
-    title="Zoom In"
-  >
-    <MdZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-  </button>
-</div>
-  </div>
-</div>
+          <div className="absolute bottom-6 right-[38%] flex flex-col items-end gap-2 pointer-events-none">
+            <div className="flex items-center gap-3 px-4 py-2 bg-white/90 dark:bg-[#1f2938] backdrop-blur shadow-lg border border-gray-200 rounded-full text-xs font-mono text-gray-600 pointer-events-auto">
+              {/* XY Coordinates */}
+              <div className="flex gap-2 dark:text-gray-200">
+                <span className="font-bold text-gray-400">X</span> {cursorPos.x}
+              </div>
+              <div className="w-px h-3 bg-gray-400"></div>
+              <div className="flex gap-2 dark:text-gray-200">
+                <span className="font-bold text-gray-400">Y</span> {cursorPos.y}
+              </div>
+              
+              
+              <div className="w-px h-3 bg-gray-300"></div>
+              
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-2">
+            {/* Zoom Out Button */}
+            <button
+              onClick={handleZoomOut}
+              disabled={stageScale <= 0.1}
+              className="w-8 h-8 flex items-center justify-center rounded-full
+                bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700
+                border border-gray-300 dark:border-gray-600
+                shadow-sm hover:shadow
+                disabled:opacity-40 disabled:cursor-not-allowed
+                transition-all duration-200"
+              title="Zoom Out"
+            >
+              <MdZoomOut className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            </button>
+            
+            {/* Zoom Percentage Display & Reset */}
+            <div className="flex items-center">
+              {/* Percentage Display */}
+              <div className="px-3 py-1.5 text-sm font-medium
+                bg-gray-50 dark:bg-gray-800 
+                rounded-l-md
+                text-gray-700 dark:text-gray-300">
+                {Math.round(stageScale * 100)}%
+              </div>
+              
+              {/* Reset Button */}
+              
+            </div>
+            
+            {/* Zoom In Button */}
+            <button
+              onClick={handleZoomIn}
+              disabled={stageScale >= 3}
+              className="w-8 h-8 flex items-center justify-center rounded-full
+                bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700
+                border border-gray-300 dark:border-gray-600
+                shadow-sm hover:shadow
+                disabled:opacity-40 disabled:cursor-not-allowed
+                transition-all duration-200"
+              title="Zoom In"
+            >
+              <MdZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
+            </div>
+          </div>
           {/* Connection Guidance Overlay */}
           {isDrawingConnection && (
             <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none">
@@ -678,18 +699,20 @@ export default function Editor() {
             </div>
           )}
         </div>
-
-        {/* Right Sidebar - Canvas Properties/Items List */}
-        <CanvasPropertiesSidebar
-          items={droppedItems}
-          selectedItemId={selectedItemId}
-          onSelectItem={handleSelectItem}
-          onDeleteItem={handleDeleteItem}
-          onUpdateItem={handleUpdateItem}
-          className="hidden lg:flex"
-          showAllItemsByDefault={true}
-        />
+          {/* Right Sidebar - Canvas Properties/Items List */}
+        
+        <div className="overflow-hidden hidden lg:block">
+          <CanvasPropertiesSidebar
+            items={droppedItems}
+            selectedItemId={selectedItemId}
+            onSelectItem={handleSelectItem}
+            onDeleteItem={handleDeleteItem}
+            onUpdateItem={handleUpdateItem}
+            showAllItemsByDefault
+          />
       </div>
+      </div>
+      
     </div>
   );
 }
