@@ -13,6 +13,7 @@ export interface ComponentItem {
   object: string;
   args: any[];
   grips?: Grip[];
+  isCustom?: boolean;
 }
 
 export interface CanvasItem extends ComponentItem {

@@ -11,6 +11,7 @@ import { ComponentLibrarySidebar, CanvasPropertiesSidebar } from "@/components/C
 import { ComponentItem, CanvasItem, Connection, Grip } from "@/components/Canvas/types";
 import { calculateManualPathsWithBridges } from "@/utils/routing";
 import { useHistory } from "@/hooks/useHistory";
+import { useComponents } from "@/context/ComponentContext";
 
 interface CanvasState {
   items: CanvasItem[];
@@ -22,7 +23,8 @@ export default function Editor() {
   const navigate = useNavigate();
 
   // --- State ---
-  const [components, setComponents] = useState<Record<string, Record<string, ComponentItem>>>({});
+  const { components } = useComponents();
+  // const [components, setComponents] = useState<Record<string, Record<string, ComponentItem>>>({}); // Removed local state
   
   // History Managed State (Items & Connections)
   const { 
@@ -82,9 +84,13 @@ export default function Editor() {
   const dragItemRef = useRef<ComponentItem | null>(null);
 
   // --- Initialization ---
+  /* 
+  // No longer needed - components loaded from Context
   useEffect(() => {
     setComponents(componentsConfig);
   }, []);
+  */
+
 
   // --- Helpers ---
   const getGripPosition = (item: CanvasItem, gripIndex: number): { x: number; y: number } | null => {
