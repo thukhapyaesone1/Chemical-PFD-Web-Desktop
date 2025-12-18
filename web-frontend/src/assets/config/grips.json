@@ -1,0 +1,420 @@
+[
+  {
+    "component": "Centrifugal Compressor",
+    "category": "Compressors",
+    "default_label": "C-01-A/B",
+    "grips": [
+      { "x": 41.3168, "y": 89.8241, "side": "top" },
+      { "x": 62.0517, "y": 79.1832, "side": "top" },
+      { "x": 41.3168, "y": 6.4479, "side": "bottom" },
+      { "x": 62.0517, "y": 16.1485, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Ejector Compressor",
+    "category": "Compressors",
+    "default_label": "C-02",
+    "grips": [
+      { "x": 13.1019, "y": 100, "side": "top" },
+      { "x": 0, "y": 50, "side": "left" },
+      { "x": 100, "y": 50, "side": "right" }
+    ]
+  },
+  {
+    "component": "Fan",
+    "category": "Compressors",
+    "default_label": "F-01",
+    "grips": [
+      { "x": 50, "y": 79.9276, "side": "top" },
+      { "x": 0, "y": 79.9276, "side": "left" },
+      { "x": 100, "y": 79.9276, "side": "right" }
+    ]
+  },
+  {
+    "component": "Positive Displacement Compressor",
+    "category": "Compressors",
+    "default_label": "C-03",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": 21.1551, "y": 30, "side": "left" },
+      { "x": 79.5785, "y": 30, "side": "right" }
+    ]
+  },
+  {
+    "component": "Reciprocating Compressor",
+    "category": "Compressors",
+    "default_label": "C-04",
+    "grips": [
+      { "x": 22.8568, "y": 83, "side": "left" },
+      { "x": 46.8109, "y": 83, "side": "right" }
+    ]
+  },
+  {
+    "component": "Turbine",
+    "category": "Compressors",
+    "default_label": "T-01",
+    "grips": [
+      { "x": 18.0621, "y": 79.1193, "side": "top" },
+      { "x": 45.2091, "y": 91.3853, "side": "top" },
+      { "x": 18.0621, "y": 16.4154, "side": "bottom" },
+      { "x": 45.2091, "y": 4.5726, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Continuous Dryer",
+    "category": "Dryers",
+    "default_label": "D-01",
+    "grips": [
+      { "x": 8.13, "y": 35.2, "side": "top" },
+      { "x": 98.9, "y": 28, "side": "bottom" },
+      { "x": 50, "y": 110, "side": "top" }
+    ]
+  },
+  {
+    "component": "General Symbol",
+    "category": "Feeders",
+    "default_label": "G-01",
+    "grips": [
+      { "x": 20, "y": 100, "side": "top" },
+      { "x": 80, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Reducer, Expander",
+    "category": "Fittings",
+    "default_label": "F-01",
+    "grips": [
+      { "x": 100, "y": 50, "side": "right" },
+      { "x": 0, "y": 50, "side": "left" }
+    ]
+  },
+  {
+    "component": "Filter",
+    "category": "Fittings",
+    "default_label": "F-02",
+    "grips": [
+      { "x": 0, "y": 50, "side": "left" },
+      { "x": 100, "y": 50, "side": "right" }
+    ]
+  },
+  {
+    "component": "Oil Gas or Pulverized Fuel Furnace",
+    "category": "Furnaces and Boilers",
+    "default_label": "F-02",
+    "grips": [
+      { "x": 58.2767, "y": 100, "side": "top" },
+      { "x": 0, "y": 19.6927, "side": "left" },
+      { "x": 17.2777, "y": 33.3945, "side": "left" },
+      { "x": 100, "y": 33.3945, "side": "right" },
+      { "x": 57.9724, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Solid Fuel Furnace",
+    "category": "Furnaces and Boilers",
+    "default_label": "F-03",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": 0, "y": 33.3935, "side": "left" },
+      { "x": 100, "y": 33.3935, "side": "right" },
+      { "x": 50, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "One Cell Fired Heater",
+    "category": "Furnaces and Boilers",
+    "default_label": "H-03",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": 0, "y": 28, "side": "left" },
+      { "x": 25, "y": 87.5, "side": "left" },
+      { "x": 100, "y": 28, "side": "right" },
+      { "x": 75, "y": 87.5, "side": "right" },
+      { "x": 50, "y": -5, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Two Cell Fired Heater",
+    "category": "Furnaces and Boilers",
+    "default_label": "H-04",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": -5, "y": 33.33, "side": "left" },
+      { "x": 33.33, "y": 91.66, "side": "left" },
+      { "x": 105, "y": 33.33, "side": "right" },
+      { "x": 66.66, "y": 91.66, "side": "right" },
+      { "x": 16.67, "y": -10, "side": "bottom" },
+      { "x": 83.33, "y": -10, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "905 Exchanger",
+    "category": "Heating or Cooling Arrangements",
+    "default_label": "E-01",
+    "grips": [
+      { "x": 15.85, "y": 13.5, "side": "bottom" },
+      { "x": 60.5, "y": 13.5, "side": "bottom" },
+      { "x": 15.85, "y": 88.88, "side": "top" },
+      { "x": 60.5, "y": 88.88, "side": "top" }
+    ]
+  },
+  {
+    "component": "907 Kettle Reboiler",
+    "category": "Heating or Cooling Arrangements",
+    "default_label": "E-02",
+    "grips": [
+      { "x": 18, "y": 20.33, "side": "bottom" },
+      { "x": 70, "y": 20.33, "side": "bottom" },
+      { "x": 18, "y": 75, "side": "top" },
+      { "x": 70, "y": 96, "side": "top" }
+    ]
+  },
+  {
+    "component": "Exchanger",
+    "category": "Heating or Cooling Arrangements",
+    "default_label": "E-03",
+    "grips": [
+      { "x": 100, "y": 31.7447, "side": "right" },
+      { "x": 100, "y": 62.7055, "side": "right" },
+      { "x": 35.66, "y": 100, "side": "top" },
+      { "x": 36.66, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Heat Exchanger",
+    "category": "Heating or Cooling Arrangements",
+    "default_label": "E-04",
+    "grips": [
+      { "x": 0, "y": 47.1436, "side": "left" },
+      { "x": 100, "y": 47.1436, "side": "right" },
+      { "x": 50.9284, "y": 100, "side": "top" },
+      { "x": 50.9284, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Immersion Coil",
+    "category": "Heating or Cooling Arrangements",
+    "default_label": "H-01",
+    "grips": [
+      { "x": 44.56, "y": 100, "side": "top" },
+      { "x": 88.23, "y": 100, "side": "top" }
+    ]
+  },
+  {
+    "component": "Kettle Reboiler",
+    "category": "Heating or Cooling Arrangements",
+    "default_label": "H-02",
+    "grips": [
+      { "x": 100, "y": 26.3, "side": "right" },
+      { "x": 0, "y": 26.3, "side": "left" },
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": 50, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Inflow Line",
+    "category": "Piping",
+    "default_label": "I-01",
+    "grips": [
+      { "x": 100, "y": 50, "side": "right" }
+    ]
+  },
+  {
+    "component": "Outflow Line",
+    "category": "Piping",
+    "default_label": "O-01",
+    "grips": [
+      { "x": 0, "y": 50, "side": "left" }
+    ]
+  },
+  {
+    "component": "Horizontal Vessel",
+    "category": "Process Vessels",
+    "default_label": "V-01",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": 0, "y": 50, "side": "left" },
+      { "x": 100, "y": 50, "side": "right" },
+      { "x": 50, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Packed Vessel",
+    "category": "Process Vessels",
+    "default_label": "V-02",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": 0, "y": 50, "side": "left" },
+      { "x": 100, "y": 50, "side": "right" },
+      { "x": 50, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Trays or plates",
+    "category": "Process Vessels",
+    "default_label": "V-03",
+    "grips": []
+  },
+  {
+    "component": "Vertical Vessel",
+    "category": "Process Vessels",
+    "default_label": "V-04",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": -10, "y": 50, "side": "left" },
+      { "x": 110, "y": 50, "side": "right" },
+      { "x": 50, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Duplex Pump",
+    "category": "Pumps",
+    "default_label": "P-01-A/B",
+    "grips": [
+      { "x": 100, "y": 68.8032, "side": "right" },
+      { "x": 0, "y": 88.1366, "side": "left" }
+    ]
+  },
+  {
+    "component": "Plunger Pump",
+    "category": "Pumps",
+    "default_label": "P-02-A/B",
+    "grips": [
+      { "x": 87.0329, "y": 100, "side": "top" },
+      { "x": 87.0329, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Proportioning Pump",
+    "category": "Pumps",
+    "default_label": "P-03-A/B",
+    "grips": [
+      { "x": 100, "y": 83.0966, "side": "right" },
+      { "x": 0, "y": 83.0966, "side": "left" }
+    ]
+  },
+  {
+    "component": "Reciprocating Pump",
+    "category": "Pumps",
+    "default_label": "P-04-A/B",
+    "grips": [
+      { "x": 100, "y": 78.3970, "side": "right" },
+      { "x": 0, "y": 78.3970, "side": "left" }
+    ]
+  },
+  {
+    "component": "Blowing Egg",
+    "category": "Pumps",
+    "default_label": "P-05",
+    "grips": [
+      { "x": 15.2888, "y": 56.4147, "side": "top" },
+      { "x": 84.7112, "y": 56.4147, "side": "top" }
+    ]
+  },
+  {
+    "component": "Ejector(Vapor Service)",
+    "category": "Pumps",
+    "default_label": "P-06",
+    "grips": [
+      { "x": 18, "y": 100, "side": "top" },
+      { "x": 0, "y": 50, "side": "left" },
+      { "x": 100, "y": 50, "side": "right" }
+    ]
+  },
+  {
+    "component": "Hand Pump with Drum",
+    "category": "Pumps",
+    "default_label": "P-07",
+    "grips": [
+      { "x": 92.8093, "y": 70.6041, "side": "right" },
+      { "x": 7.9138, "y": 70.6041, "side": "left" },
+      { "x": 4.1369, "y": 86.9886, "side": "left" }
+    ]
+  },
+  {
+    "component": "Centrifugal Pump",
+    "category": "Pumps",
+    "default_label": "P-01",
+    "grips": [
+      { "x": 100, "y": 97.2, "side": "right" },
+      { "x": 0, "y": 58.78, "side": "left" }
+    ]
+  },
+  {
+    "component": "Separators for Liquids, Decanter",
+    "category": "Separators",
+    "default_label": "S-01",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": 0, "y": 50, "side": "left" },
+      { "x": 100, "y": 50, "side": "right" },
+      { "x": 50, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Jaw Crusher",
+    "category": "Size Reduction Equipements",
+    "default_label": "CR-01",
+    "grips": [
+      { "x": 79.65, "y": 100, "side": "top" },
+      { "x": 0, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Roller Crusher",
+    "category": "Size Reduction Equipements",
+    "default_label": "CR-02",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": 50, "y": 0, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Fixed Roof Tank",
+    "category": "Storage Vessels Tanks",
+    "default_label": "T-01",
+    "grips": [
+      { "x": 50, "y": 100, "side": "top" },
+      { "x": -6, "y": 50, "side": "left" },
+      { "x": 107, "y": 50, "side": "right" },
+      { "x": 50, "y": -10, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Floating Roof Tank",
+    "category": "Storage Vessels Tanks",
+    "default_label": "T-02",
+    "grips": [
+      { "x": -7, "y": 50, "side": "left" },
+      { "x": 107, "y": 50, "side": "right" },
+      { "x": 50, "y": -10, "side": "bottom" }
+    ]
+  },
+  {
+    "component": "Gate Valve",
+    "category": "Valves",
+    "default_label": "VLV-01",
+    "grips": [
+      { "x": 0, "y": 50, "side": "left" },
+      { "x": 100, "y": 50, "side": "right" }
+    ]
+  },
+  {
+    "component": "Butterfly Valve",
+    "category": "Valves",
+    "default_label": "VLV-02",
+    "grips": [
+      { "x": 0, "y": 50, "side": "left" },
+      { "x": 100, "y": 50, "side": "right" }
+    ]
+  },
+  {
+    "component": "Float Valve",
+    "category": "Valves",
+    "default_label": "VLV-03",
+    "grips": [
+      { "x": 0, "y": 50, "side": "left" },
+      { "x": 100, "y": 50, "side": "right" }
+    ]
+  }
+]

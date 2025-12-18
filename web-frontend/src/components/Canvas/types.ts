@@ -1,4 +1,10 @@
 // Reusable types for canvas and components
+export interface Grip {
+  x: number;
+  y: number;
+  side: "top" | "bottom" | "left" | "right";
+}
+
 export interface ComponentItem {
   name: string;
   icon: string;
@@ -6,6 +12,7 @@ export interface ComponentItem {
   class: string;
   object: string;
   args: any[];
+  grips?: Grip[];
 }
 
 export interface CanvasItem extends ComponentItem {
@@ -15,6 +22,17 @@ export interface CanvasItem extends ComponentItem {
   width: number;
   height: number;
   rotation: number;
+}
+
+export interface Connection {
+  id: number;
+  sourceItemId: number;
+  sourceGripIndex: number;
+  targetItemId: number;
+  targetGripIndex: number;
+  // Optional manual waypoints (absolute canvas coordinates) between source and target grips.
+  // When present, the rendered line will go: sourceGrip -> ...waypoints... -> targetGrip.
+  waypoints?: { x: number; y: number }[];
 }
 
 export interface StagePosition {
@@ -44,6 +62,11 @@ export interface CanvasItemImageProps {
   onChange: (newAttrs: CanvasItem) => void;
   onDragEnd?: (item: CanvasItem) => void;
   onTransformEnd?: (item: CanvasItem) => void;
+  onGripMouseDown?: (itemId: number, gripIndex: number, x: number, y: number) => void;
+  onGripMouseEnter?: (itemId: number, gripIndex: number) => void;
+  onGripMouseLeave?: () => void;
+  isDrawingConnection?: boolean;
+  hoveredGrip?: { itemId: number; gripIndex: number } | null;
 }
 
 export interface CanvasPropertiesSidebarProps {

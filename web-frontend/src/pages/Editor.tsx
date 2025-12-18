@@ -1,24 +1,42 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Stage, Layer } from "react-konva";
+import { Stage, Layer, Line } from "react-konva";
 import Konva from "konva";
 import { Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Tooltip } from "@heroui/react";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { componentsConfig } from "@/assets/config/items";
 import { CanvasItemImage } from "@/components/Canvas/CanvasItemImage";
-import { ComponentLibrarySidebar,CanvasPropertiesSidebar } from "@/components/Canvas/ComponentLibrarySidebar"; 
-import { ComponentItem, CanvasItem } from "@/components/Canvas/types";
+import { ConnectionLine } from "@/components/Canvas/ConnectionLine";
+import { ComponentLibrarySidebar, CanvasPropertiesSidebar } from "@/components/Canvas/ComponentLibrarySidebar";
+import { ComponentItem, CanvasItem, Connection, Grip } from "@/components/Canvas/types";
+import { calculateManualPathsWithBridges } from "@/utils/routing";
 
 export default function Editor() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  
-  // State
+
+  // --- State ---
   const [components, setComponents] = useState<Record<string, Record<string, ComponentItem>>>({});
   const [droppedItems, setDroppedItems] = useState<CanvasItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  
+
+  // Connection State
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(null);
+  const [isDrawingConnection, setIsDrawingConnection] = useState(false);
+  const [tempConnection, setTempConnection] = useState<{
+    sourceItemId: number;
+    sourceGripIndex: number;
+    startX: number;
+    startY: number;
+    // Manually placed intermediate points while drawing
+    waypoints: { x: number; y: number }[];
+    currentX: number;
+    currentY: number;
+  } | null>(null);
+  const [hoveredGrip, setHoveredGrip] = useState<{ itemId: number; gripIndex: number } | null>(null);
+
   // Canvas Viewport State
   const [stageScale, setStageScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
@@ -29,15 +47,54 @@ export default function Editor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragItemRef = useRef<ComponentItem | null>(null);
 
+  // --- Initialization ---
   useEffect(() => {
     setComponents(componentsConfig);
   }, []);
+
+  // --- Helpers ---
+  const getGripPosition = (item: CanvasItem, gripIndex: number): { x: number; y: number } | null => {
+    if (!item.grips || gripIndex >= item.grips.length) return null;
+    const grip: Grip = item.grips[gripIndex];
+    const x = item.x + (grip.x / 100) * item.width;
+    const y = item.y + ((100 - grip.y) / 100) * item.height;
+    return { x, y };
+  };
+
+
+  // Precompute final polylines with small "bridge" bumps where
+  // manually drawn lines cross.
+  const connectionPaths = useMemo(
+    () => calculateManualPathsWithBridges(connections, droppedItems),
+    [connections, droppedItems]
+  );
+
+  // --- Event Listeners ---
+
+  // Handle keyboard events (Delete key)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace' || e.key.toLowerCase() === 'd') {
+        if (selectedConnectionId !== null) {
+          // Delete selected connection
+          setConnections(prev => prev.filter(conn => conn.id !== selectedConnectionId));
+          setSelectedConnectionId(null);
+        } else if (selectedItemId !== null) {
+          // Delete selected item
+          handleDeleteItem(selectedItemId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedConnectionId, selectedItemId]);
 
   // --- Handlers ---
 
   const handleDragStart = (e: React.DragEvent, item: ComponentItem) => {
     dragItemRef.current = item;
-    
+
     // Set drag image (ghost)
     if (item.svg) {
       const img = new Image();
@@ -61,25 +118,64 @@ export default function Editor() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const stage = stageRef.current;
-    
+
     // If we dropped a sidebar item
     if (dragItemRef.current && stage) {
-      stage.setPointersPositions(e);
+      stage.setPointersPositions(e.nativeEvent);
       const pointer = stage.getRelativePointerPosition();
-      
+
       if (pointer) {
-        const newItem: CanvasItem = {
-          ...dragItemRef.current,
-          id: Date.now(),
-          x: pointer.x - 40, // Center based on 80px width
-          y: pointer.y - 40,
-          width: 80,
-          height: 80,
-          rotation: 0
+        // Capture the current item before async operations
+        const droppedItem = dragItemRef.current;
+
+        // Create a temporary image to get aspect ratio
+        const img = new Image();
+        img.src = droppedItem.svg || droppedItem.icon;
+
+        img.onload = () => {
+          const aspectRatio = img.width / img.height;
+          const baseSize = 80;
+          let width = baseSize;
+          let height = baseSize;
+
+          // Preserve aspect ratio
+          if (aspectRatio > 1) {
+            // Wider than tall
+            height = baseSize / aspectRatio;
+          } else {
+            // Taller than wide
+            width = baseSize * aspectRatio;
+          }
+
+          const newItem: CanvasItem = {
+            ...droppedItem,
+            id: Date.now(),
+            x: pointer.x - width / 2,
+            y: pointer.y - height / 2,
+            width,
+            height,
+            rotation: 0
+          };
+
+          setDroppedItems(prev => [...prev, newItem]);
+          setSelectedItemId(newItem.id);
         };
-        
-        setDroppedItems(prev => [...prev, newItem]);
-        setSelectedItemId(newItem.id);
+
+        // Fallback if image doesn't load
+        img.onerror = () => {
+          const newItem: CanvasItem = {
+            ...droppedItem,
+            id: Date.now(),
+            x: pointer.x - 40,
+            y: pointer.y - 40,
+            width: 80,
+            height: 80,
+            rotation: 0
+          };
+
+          setDroppedItems(prev => [...prev, newItem]);
+          setSelectedItemId(newItem.id);
+        };
       }
       dragItemRef.current = null;
     }
@@ -121,14 +217,17 @@ export default function Editor() {
 
   const handleDeleteItem = (itemId: number) => {
     setDroppedItems(prev => prev.filter(item => item.id !== itemId));
+    // Also remove any connections attached to this item
+    setConnections(prev => prev.filter(c => c.sourceItemId !== itemId && c.targetItemId !== itemId));
+
     if (selectedItemId === itemId) {
       setSelectedItemId(null);
     }
   };
 
   const handleUpdateItem = (itemId: number, updates: Partial<CanvasItem>) => {
-    setDroppedItems(prev => 
-      prev.map(item => 
+    setDroppedItems(prev =>
+      prev.map(item =>
         item.id === itemId ? { ...item, ...updates } : item
       )
     );
@@ -142,15 +241,81 @@ export default function Editor() {
     setSelectedItemId(null);
   };
 
+  // --- Connection Handlers ---
+
+  const handleGripMouseDown = (itemId: number, gripIndex: number, x: number, y: number) => {
+    // If we are already drawing and user clicks a *different* grip, finish the connection.
+    if (
+      isDrawingConnection &&
+      tempConnection &&
+      (tempConnection.sourceItemId !== itemId || tempConnection.sourceGripIndex !== gripIndex)
+    ) {
+      const newConnection: Connection = {
+        id: Date.now(),
+        sourceItemId: tempConnection.sourceItemId,
+        sourceGripIndex: tempConnection.sourceGripIndex,
+        targetItemId: itemId,
+        targetGripIndex: gripIndex,
+        waypoints: tempConnection.waypoints,
+      };
+
+      setConnections(prev => [...prev, newConnection]);
+      setIsDrawingConnection(false);
+      setTempConnection(null);
+      return;
+    }
+
+    // Otherwise, start a new manual polyline from this grip.
+    setIsDrawingConnection(true);
+    setTempConnection({
+      sourceItemId: itemId,
+      sourceGripIndex: gripIndex,
+      startX: x,
+      startY: y,
+      waypoints: [],
+      currentX: x,
+      currentY: y,
+    });
+  };
+
+  const handleGripMouseEnter = (itemId: number, gripIndex: number) => {
+    setHoveredGrip({ itemId, gripIndex });
+  };
+
+  const handleGripMouseLeave = () => {
+    setHoveredGrip(null);
+  };
+
+  const handleStageMouseMove = () => {
+    if (isDrawingConnection && tempConnection) {
+      const stage = stageRef.current;
+      if (stage) {
+        const pointer = stage.getRelativePointerPosition();
+        if (pointer) {
+          setTempConnection(prev => prev ? {
+            ...prev,
+            currentX: pointer.x,
+            currentY: pointer.y,
+          } : null);
+        }
+      }
+    }
+  };
+
+  const handleStageMouseUp = () => {
+    // In manual mode we don't auto-cancel on mouse up; user either clicks
+    // empty canvas to add waypoints or a grip to finish the connection.
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
-      {/* Header Bar - Preserved */}
+      {/* Header Bar */}
       <div className="h-14 border-b flex items-center px-4 justify-between bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 z-10">
         <div className="flex items-center gap-2">
           <Tooltip content="Back to Dashboard">
-            <Button 
-              isIconOnly 
-              variant="light" 
+            <Button
+              isIconOnly
+              variant="light"
               onPress={() => navigate("/dashboard")}
               className="text-gray-700 dark:text-gray-300"
             >←</Button>
@@ -218,7 +383,7 @@ export default function Editor() {
           onSearch={setSearchQuery}
           initialSearchQuery={searchQuery}
         />
-        
+
         {/* Canvas Area - Konva */}
         <div
           className="flex-1 relative overflow-hidden bg-white"
@@ -227,16 +392,16 @@ export default function Editor() {
           onDragOver={(e) => e.preventDefault()}
         >
           {/* CSS Grid Background */}
-          <div 
-            className="absolute inset-0 pointer-events-none" 
-            style={{ 
-              backgroundImage: 'radial-gradient(#9ca3af 1px, transparent 1px)', 
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: 'radial-gradient(#9ca3af 1px, transparent 1px)',
               backgroundSize: `${20 * stageScale}px ${20 * stageScale}px`,
               backgroundPosition: `${stagePos.x}px ${stagePos.y}px`,
               opacity: 0.3
-            }} 
+            }}
           />
-          
+
           <Stage
             width={window.innerWidth - (64 + 72 + 16)} // 64(left) + 72(right) + 16(padding)
             height={window.innerHeight - 56}
@@ -248,27 +413,86 @@ export default function Editor() {
             onWheel={handleWheel}
             ref={stageRef}
             onMouseDown={(e) => {
-              // Click on stage deselects
               const clickedOnEmpty = e.target === e.target.getStage();
+
+              // While drawing a connection, clicking on empty canvas creates a waypoint
+              if (clickedOnEmpty && isDrawingConnection && tempConnection) {
+                const stage = stageRef.current;
+                if (stage) {
+                  const pointer = stage.getRelativePointerPosition();
+                  if (pointer) {
+                    setTempConnection(prev =>
+                      prev
+                        ? {
+                          ...prev,
+                          waypoints: [...prev.waypoints, { x: pointer.x, y: pointer.y }],
+                        }
+                        : prev
+                    );
+                  }
+                }
+                return;
+              }
+
+              // Otherwise, click on empty stage deselects
               if (clickedOnEmpty) {
                 handleClearSelection();
+                setSelectedConnectionId(null);
               }
             }}
             onMouseMove={() => {
               const stage = stageRef.current;
               if (stage) {
                 const pointer = stage.getRelativePointerPosition();
-                if(pointer) setCursorPos({ x: Math.round(pointer.x), y: Math.round(pointer.y) });
+                if (pointer) setCursorPos({ x: Math.round(pointer.x), y: Math.round(pointer.y) });
               }
+              handleStageMouseMove();
             }}
+            onMouseUp={handleStageMouseUp}
             onDragEnd={(e) => {
-               // Update stage position state when panning finishes
-               if(e.target === stageRef.current) {
-                   setStagePos({ x: e.target.x(), y: e.target.y() });
-               }
+              // Update stage position state when panning finishes
+              if (e.target === stageRef.current) {
+                setStagePos({ x: e.target.x(), y: e.target.y() });
+              }
             }}
           >
             <Layer>
+              {/* Render Connections */}
+              {connections.map((connection) => (
+                <ConnectionLine
+                  key={connection.id}
+                  connection={connection}
+                  items={droppedItems}
+                  // We now pass pathData instead of points for rendering
+                  // points is kept empty [] to satisfy type if needed, or we can just ignore it
+                  points={[]}
+                  pathData={connectionPaths[connection.id]}
+                  isSelected={connection.id === selectedConnectionId}
+                  onSelect={() => {
+                    setSelectedConnectionId(connection.id);
+                    setSelectedItemId(null);
+                  }}
+                />
+              ))}
+
+              {/* Render Temporary Connection Line (Drawing) */}
+              {tempConnection && (
+                <Line
+                  points={[
+                    tempConnection.startX,
+                    tempConnection.startY,
+                    ...tempConnection.waypoints.flatMap((p) => [p.x, p.y]),
+                    tempConnection.currentX,
+                    tempConnection.currentY,
+                  ]}
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  dash={[10, 5]}
+                  listening={false}
+                />
+              )}
+
+              {/* Render Components */}
               {droppedItems.map((item) => (
                 <CanvasItemImage
                   key={item.id}
@@ -276,36 +500,69 @@ export default function Editor() {
                   isSelected={item.id === selectedItemId}
                   onSelect={() => handleSelectItem(item.id)}
                   onChange={(newAttrs) => {
-                    setDroppedItems(prev => 
+                    setDroppedItems(prev =>
                       prev.map(i => i.id === newAttrs.id ? newAttrs : i)
                     );
                   }}
+                  onGripMouseDown={handleGripMouseDown}
+                  onGripMouseEnter={handleGripMouseEnter}
+                  onGripMouseLeave={handleGripMouseLeave}
+                  isDrawingConnection={isDrawingConnection}
+                  hoveredGrip={hoveredGrip}
                 />
               ))}
             </Layer>
           </Stage>
 
-          {/* Independent Floating Bubble */}
+          {/* Floating Info Bubble */}
           <div className="absolute bottom-6 right-[45%] flex flex-col items-end gap-2 pointer-events-none">
-             {/* Coordinate Bubble */}
-             <div className="flex items-center gap-3 px-4 py-2 bg-white/90 dark:bg-[#1f2938]  backdrop-blur shadow-lg border border-gray-200 rounded-full text-xs font-mono text-gray-600 pointer-events-auto">
-                <div className="flex gap-2 dark:text-gray-200">
-                    <span className="font-bold text-gray-400">X</span> {cursorPos.x}
-                </div>
-                <div className="w-px h-3 bg-gray-400"></div>
-                <div className="flex gap-2 dark:text-gray-200">
-                    <span className="font-bold text-gray-400">Y</span> {cursorPos.y}
-                </div>
-                <div className="w-px h-3 bg-gray-300"></div>
-                <div className="font-semibold text-blue-600">
-                    {Math.round(stageScale * 100)}%
-                </div>
-             </div>
-
-             {/* Help Bubble */}
-             
+            <div className="flex items-center gap-3 px-4 py-2 bg-white/90 dark:bg-[#1f2938]  backdrop-blur shadow-lg border border-gray-200 rounded-full text-xs font-mono text-gray-600 pointer-events-auto">
+              <div className="flex gap-2 dark:text-gray-200">
+                <span className="font-bold text-gray-400">X</span> {cursorPos.x}
+              </div>
+              <div className="w-px h-3 bg-gray-400"></div>
+              <div className="flex gap-2 dark:text-gray-200">
+                <span className="font-bold text-gray-400">Y</span> {cursorPos.y}
+              </div>
+              <div className="w-px h-3 bg-gray-300"></div>
+              <div className="font-semibold text-blue-600">
+                {Math.round(stageScale * 100)}%
+              </div>
+            </div>
           </div>
-          
+
+          {/* Connection Guidance Overlay */}
+          {isDrawingConnection && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none">
+              <div className="px-4 py-2 bg-black/70 backdrop-blur text-white text-sm rounded-full shadow-lg border border-white/10 flex items-center gap-3">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                  Drawing Connection
+                </span>
+                <div className="w-px h-3 bg-white/20" />
+                <span className="text-white/80 text-xs">
+                  Click empty space to add corner • Click target point to finish
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Selection Guidance Overlay */}
+          {!isDrawingConnection && (selectedItemId !== null || selectedConnectionId !== null) && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none">
+              <div className="px-4 py-2 bg-black/70 backdrop-blur text-white text-sm rounded-full shadow-lg border border-white/10 flex items-center gap-3">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                  Selection Active
+                </span>
+                <div className="w-px h-3 bg-white/20" />
+                <span className="text-white/80 text-xs">
+                  Press 'Del', 'Backspace' or 'D' to delete selection
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Empty State Overlay */}
           {droppedItems.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
