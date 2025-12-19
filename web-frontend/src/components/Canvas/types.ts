@@ -78,3 +78,85 @@ export interface CanvasPropertiesSidebarProps {
   className?: string;
   showAllItemsByDefault?: boolean;
 }
+
+// Export image types 
+export type ExportFormat = 'png' | 'jpg' | 'svg' | 'pdf';
+export type ExportQuality = 'low' | 'medium' | 'high';
+
+export interface ExportOptions {
+  format: ExportFormat;
+  quality: ExportQuality;
+  scale: number;
+  includeGrid: boolean;
+  includeWatermark: boolean;
+  watermarkText: string;
+  padding: number;
+  backgroundColor: string;
+}
+
+export interface ExportPreset {
+  id: string;
+  name: string;
+  description: string;
+  options: Partial<ExportOptions>;
+}
+
+export const defaultExportOptions: ExportOptions = {
+  format: 'png',
+  quality: 'high',
+  scale: 2,
+  includeGrid: false,
+  includeWatermark: false,
+  watermarkText: '',
+  padding: 20,
+  backgroundColor: '#ffffff',
+};
+
+export const exportPresets: ExportPreset[] = [
+  {
+    id: 'presentation',
+    name: 'Presentation',
+    description: 'High quality for slides',
+    options: {
+      format: 'png',
+      quality: 'high',
+      scale: 2,
+      includeGrid: false,
+      backgroundColor: '#ffffff',
+    },
+  },
+  {
+    id: 'print',
+    name: 'Print',
+    description: 'High resolution for printing',
+    options: {
+      format: 'pdf',
+      quality: 'high',
+      scale: 3,
+      includeGrid: false,
+      padding: 40,
+    },
+  },
+  {
+    id: 'web',
+    name: 'Web',
+    description: 'Optimized for web',
+    options: {
+      format: 'jpg',
+      quality: 'medium',
+      scale: 1,
+      includeGrid: false,
+    },
+  },
+  {
+    id: 'technical',
+    name: 'Technical',
+    description: 'Include grid for documentation',
+    options: {
+      format: 'svg',
+      quality: 'high',
+      includeGrid: true,
+      padding: 30,
+    },
+  },
+];

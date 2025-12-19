@@ -8,6 +8,7 @@ import Dashboard from "@/pages/Dashboard";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Editor from "@/pages/Editor";
+import ReportsPage from "@/pages/Reports";
 
 const useAuth = () => {
   const user = { loggedIn: true}; // Toggle this to false to test login
@@ -37,6 +38,8 @@ function App() {
 
         {/* Editor Layout */}
         <Route path="/editor/:projectId" element={<Editor />} />
+        <Route path="/reports" element={<ReportsPage />} />
+
       </Route>
     </Routes>
   );

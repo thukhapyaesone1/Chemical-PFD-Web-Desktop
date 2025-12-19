@@ -44,6 +44,7 @@ export const ComponentLibrarySidebar = ({
 
   return (
     <div className={`w-64 border-r flex flex-col bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 ${className}`}>
+      <br/>
       <div className="p-3 border-b border-gray-200 dark:border-gray-700">
         <div className="relative mb-3">
           <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
@@ -189,6 +190,7 @@ export const CanvasPropertiesSidebar = ({
   return (
     <div className={`w-72 border-l p-4 flex flex-col bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 ${className}`}>
       {/* Header with view toggle */}
+      <br/>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200">
           {viewMode === "list" ? "Canvas Items" : "Properties"}
