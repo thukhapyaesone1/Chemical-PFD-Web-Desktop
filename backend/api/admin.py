@@ -7,8 +7,7 @@ from django.shortcuts import render, redirect
 import zipfile
 from django.contrib import admin, messages
 import tempfile
-import os
-import csv
+import os,csv,json
 from django.core.files import File
 
 # -----------------------------
@@ -108,16 +107,25 @@ class ComponentAdmin(admin.ModelAdmin):
                         try:
                             # Check if component with this s_no already exists
                             existing_component = Component.objects.filter(s_no=s_no).first()
+                            grips = row.get("grips")  # from CSV
+
+                            if grips:
+                                try:
+                                    grips = json.loads(grips)
+                                except json.JSONDecodeError:
+                                    grips = []
+                            else:
+                                grips = []
                             
                             if existing_component:
                                 # Update existing component
                                 component = existing_component
                                 component.parent = row.get("parent", component.parent)
-                                component.name = component_name  # Update name if changed
+                                component.name = component_name
                                 component.legend = row.get("legend", component.legend)
                                 component.suffix = row.get("suffix", component.suffix)
                                 component.object = row.get("object", component.object)
-                                component.grips = row.get("grips", component.grips)
+                                component.grips =  grips
                                 update_count += 1
                             else:
                                 # Create new component
@@ -128,7 +136,7 @@ class ComponentAdmin(admin.ModelAdmin):
                                     legend=row.get("legend"),
                                     suffix=row.get("suffix"),
                                     object=row.get("object"),
-                                    grips=row.get("grips", ""),
+                                    grips= grips,
                                 )
                                 create_count += 1
                             

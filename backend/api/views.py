@@ -1,5 +1,5 @@
 from django.shortcuts import render
-
+from django.http import Http404
 from .models import Component, Project, ProjectComponent
 from .serializers import ComponentSerializer, ProjectSerializer, ProjectComponentSerializer
 from rest_framework.response import Response
@@ -115,7 +115,7 @@ class ProjectListCreateView(generics.ListCreateAPIView):
             "project": self.get_serializer(project).data
         }, status=status.HTTP_201_CREATED)
 
-class ProjectDetailView(generics.RetrieveUpdateAPIView):
+class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated]
@@ -123,6 +123,15 @@ class ProjectDetailView(generics.RetrieveUpdateAPIView):
 
     def get_queryset(self):
         return Project.objects.filter(user=self.request.user)
+
+    def handle_exception(self, exc):
+        if isinstance(exc, Http404):
+            return Response({
+                "status": "error",
+                "message": "Project not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        return super().handle_exception(exc)
 
     def retrieve(self, request, *args, **kwargs):
         project = self.get_object()
@@ -182,4 +191,12 @@ class ProjectDetailView(generics.RetrieveUpdateAPIView):
             "status": "success",
             "message": "Project updated successfully",
             "project": project_data
+        }, status=status.HTTP_200_OK)
+    
+    def destroy(self, request, *args, **kwargs):
+        project = self.get_object()  # 404 if not owned by user
+        project.delete()
+        return Response({
+            "status": "success",
+            "message": "Project deleted successfully"
         }, status=status.HTTP_200_OK)

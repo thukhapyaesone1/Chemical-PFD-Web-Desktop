@@ -9,7 +9,7 @@ class Project(models.Model):
         return self.name
 
 class Component(models.Model):
-    s_no = models.CharField(max_length=10)
+    s_no = models.CharField(max_length=10, unique=True)
     parent = models.CharField(max_length=100)
     name = models.CharField(max_length=100)
     legend = models.CharField(max_length=100)
@@ -17,7 +17,7 @@ class Component(models.Model):
     object = models.CharField(max_length=100)
     svg = models.FileField(upload_to='components/')
     png = models.ImageField(upload_to='components/')
-    grips = models.TextField()
+    grips = models.JSONField(default=list)
 
     def __str__(self):
         return self.name
@@ -26,4 +26,4 @@ class ProjectComponent(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
     component_unique_id = models.CharField(max_length=100)
-    connections = models.JSONField()
+    connections = models.JSONField(default=list)

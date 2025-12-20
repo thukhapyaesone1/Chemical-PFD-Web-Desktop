@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Component, Project, ProjectComponent
+import json
 
 
 
@@ -14,6 +15,19 @@ class ComponentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Component
         fields = '__all__'
+    
+        def to_internal_value(self, data):
+            grips = data.get("grips")
+
+            if isinstance(grips, str):
+                try:
+                    data["grips"] = json.loads(grips)
+                except json.JSONDecodeError:
+                    raise serializers.ValidationError({
+                        "grips": "Invalid JSON format"
+                    })
+
+            return super().to_internal_value(data)
     
     def get_svg_url(self, obj):
         request = self.context.get('request')

@@ -33,7 +33,7 @@ Backend API for a **Chemical Process Flow Diagram (PFD)** system built with **Dj
       - [3.1 List \& Create Components](#31-list--create-components)
     - [4. Projects API](#4-projects-api)
       - [4.1 List \& Create Projects](#41-list--create-projects)
-      - [4.2 Project Detail \& Update](#42-project-detail--update)
+      - [4.2 Project Detail \& Update \& Delete](#42-project-detail--update--delete)
   - [Admin Component Import](#admin-component-import)
   - [Authentication Flow Summary](#authentication-flow-summary)
 
@@ -340,10 +340,10 @@ Authorization: Bearer <access_token>
 
 ---
 
-#### 4.2 Project Detail & Update
+#### 4.2 Project Detail & Update & Delete
 
 **Endpoint:** `/api/project/<id>/`  
-**Method:** `GET` / `PUT`  
+**Method:** `GET` / `PUT` / `DELETE`
 
 **GET Response Example:**
 
@@ -435,6 +435,24 @@ Authorization: Bearer <access_token>
             }
         ]
     }
+}
+```
+
+**DELETE Response Example:**
+
+```json
+{
+    "status": "success",
+    "message": "Project deleted successfully"
+}
+```
+
+**Not Found Response Example:**
+
+```json
+{
+    "status": "error",
+    "message": "Project not found"
 }
 ```
 
