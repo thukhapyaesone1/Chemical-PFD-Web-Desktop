@@ -15,7 +15,6 @@ class MenuBarManager(QObject):
     undo_clicked = pyqtSignal()
     redo_clicked = pyqtSignal()
     delete_clicked = pyqtSignal()
-    add_symbols_clicked = pyqtSignal()
     
     generate_image_clicked = pyqtSignal()
     generate_report_clicked = pyqtSignal()
@@ -75,12 +74,6 @@ class MenuBarManager(QObject):
         delete_action.triggered.connect(self.delete_clicked.emit)
         edit_menu.addAction(delete_action)
 
-        edit_menu.addSeparator()
-
-        add_symbols_action = QAction("Add new symbols", self.main_window)
-        add_symbols_action.triggered.connect(self.add_symbols_clicked.emit)
-        edit_menu.addAction(add_symbols_action)
-
         # --- Generate Menu ---
         generate_menu = menubar.addMenu("Generate")
 
@@ -94,11 +87,6 @@ class MenuBarManager(QObject):
         report_action.triggered.connect(self.generate_report_clicked.emit)
         generate_menu.addAction(report_action)
 
-        # --- Profile Menu (Right Aligned) ---
-        # Note: PyQt QMenuBar doesn't support easy right-alignment for a single menu item 
-        # without using a corner widget or spacer hacks. 
-        # Standard approach is just to append it. If visual separation is CRITICAL, 
-        # we can use setCornerWidget for a button, but a Menu is preferred for consistency.
         
         profile_menu = menubar.addMenu("Profile")
         
