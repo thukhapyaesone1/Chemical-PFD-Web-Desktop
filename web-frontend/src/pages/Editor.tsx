@@ -41,6 +41,13 @@ import {
 } from "@/store/useEditorStore";
 import { ExportReportModal } from "@/components/Canvas/ExportReportModal";
 
+type Shortcut = {
+  key: string;
+  handler: () => void;
+  requireCtrl?: boolean;
+};
+
+
 export default function Editor() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -49,6 +56,9 @@ export default function Editor() {
   const [historyReady, setHistoryReady] = useState(false);
   const [historyInitialState, setHistoryInitialState] =
     useState<CanvasState | null>(null);
+
+
+  const isCtrlOrCmd = (e: KeyboardEvent) => e.ctrlKey || e.metaKey;
 
   // ---------- Build initial state ----------
   const editorStore = useEditorStore();
@@ -207,39 +217,57 @@ export default function Editor() {
 
   // Handle keyboard events (Delete key)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        undo();
+ const handleKeyDown = (e: KeyboardEvent) => {
+  const key = e.key.toLowerCase();
 
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
-        e.preventDefault();
-        redo();
-
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
-        e.preventDefault();
-        handleCenterToContent();
-      }
-
-      if (
-        e.key === "Delete" ||
-        e.key === "Backspace" ||
-        e.key.toLowerCase() === "d"
-      ) {
+  const shortcuts: Shortcut[] = [
+    {
+      key: "z",
+      requireCtrl: true,
+      handler: undo,
+    },
+    {
+      key: "y",
+      requireCtrl: true,
+      handler: redo,
+    },
+    {
+      key: "c",
+      requireCtrl: true,
+      handler: handleCenterToContent,
+    },
+    {
+      key: "d",
+      requireCtrl: true,
+      handler: () => {
         if (selectedConnectionId !== null && projectId) {
           editorStore.removeConnection(projectId, selectedConnectionId);
-
           setSelectedConnectionId(null);
         } else if (selectedItemId !== null && projectId) {
           editorStore.deleteItem(projectId, selectedItemId);
           setSelectedItemId(null);
         }
-      }
-    };
+      },
+    },
+  ];
+
+  for (const shortcut of shortcuts) {
+    const matchesKey =
+      key === shortcut.key ||
+      (shortcut.key === "delete" &&
+        (key === "delete" || key === "backspace"));
+
+    if (
+      matchesKey &&
+      (!shortcut.requireCtrl || isCtrlOrCmd(e))
+    ) {
+      e.preventDefault();
+      shortcut.handler();
+      return;
+    }
+  }
+};
+
 
     window.addEventListener("keydown", handleKeyDown);
 
