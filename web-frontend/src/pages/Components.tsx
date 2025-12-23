@@ -14,6 +14,8 @@ export default function Components() {
     const [iconFile, setIconFile] = useState<string | null>(null);
     const [svgFile, setSvgFile] = useState<string | null>(null);
     const [grips, setGrips] = useState<{ x: number; y: number; side: "top" | "bottom" | "left" | "right" }[]>([]);
+    const [legend, setLegend] = useState("");
+    const [suffix, setSuffix] = useState("");
 
     // Edit State
     const [editingComponent, setEditingComponent] = useState<{ category: string; name: string } | null>(null);
@@ -53,6 +55,8 @@ export default function Components() {
         setName(item.name);
         setCategory(catName);
         setNewCategory("");
+        setLegend(item.legend || "");
+        setSuffix(item.suffix || "");
         setIconFile(typeof item.icon === 'string' ? item.icon : (item.icon as any)?.src || "");
         setSvgFile(typeof item.svg === 'string' ? item.svg : (item.svg as any)?.src || "");
         setGrips(item.grips ? item.grips.map(g => ({ ...g })) : []);
@@ -66,6 +70,8 @@ export default function Components() {
         setName("");
         setCategory("");
         setNewCategory("");
+        setLegend("");
+        setSuffix("");
         setIconFile(null);
         setSvgFile(null);
         setGrips([]);
@@ -94,7 +100,9 @@ export default function Components() {
             object: name.replace(/\s+/g, ''),
             args: [],
             grips,
-            isCustom: true
+            isCustom: true,
+            legend,
+            suffix
         };
 
         if (editingComponent) {
@@ -109,6 +117,8 @@ export default function Components() {
         setNewCategory("");
         setIconFile(null);
         setSvgFile(null);
+        setLegend("");
+        setSuffix("");
         setGrips([]);
         setEditingComponent(null);
         onClose();
@@ -219,6 +229,25 @@ export default function Components() {
                                                 if (val) setCategory("");
                                             }}
                                         />
+                                    </div>
+
+                                    <div className="flex gap-4 col-span-2">
+                                        <div className="flex-1">
+                                            <Input
+                                                label="Legend"
+                                                placeholder="e.g. HEX"
+                                                value={legend}
+                                                onValueChange={setLegend}
+                                            />
+                                        </div>
+                                        <div className="flex-1">
+                                            <Input
+                                                label="Suffix"
+                                                placeholder="e.g. A/B"
+                                                value={suffix}
+                                                onValueChange={setSuffix}
+                                            />
+                                        </div>
                                     </div>
 
                                     <div className="col-span-2 border p-6 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
