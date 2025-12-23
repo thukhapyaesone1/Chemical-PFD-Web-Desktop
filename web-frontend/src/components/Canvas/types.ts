@@ -19,7 +19,7 @@ export interface ComponentItem {
   legend?: string;
   suffix?: string;
   description?: string;
-  png?: string;
+  //{png?: string;}
 }
 export interface CanvasItem extends ComponentItem {
   id: number;
