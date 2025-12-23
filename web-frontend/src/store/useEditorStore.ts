@@ -1,192 +1,15 @@
 // src/store/useEditorStore.ts
 import { create } from "zustand";
+import {
+  ComponentItem,
+  CanvasItem,
+  Connection,
+  CanvasState,
+} from "../components/Canvas/types";
 
-/** Types - must match Canvas/types.ts exactly **/
-export interface Grip {
-  x: number;
-  y: number;
-  side: "top" | "bottom" | "left" | "right";
-  type?: "input" | "output"; // Optional for compatibility
-}
+/** Global store shape **/
 
-export interface ComponentItem {
-  id?: number; // Optional
-  name: string;
-  icon: string; // Required, not optional
-  svg: string; // Required, not optional
-  class: string;
-  object: string;
-  args: any[];
-  grips?: Grip[];
-  isCustom?: boolean;
-  // Additional properties from first block
-  legend?: string;
-  suffix?: string;
-  description?: string;
-  png?: string;
-}
 
-export interface CanvasItem extends ComponentItem {
-  id: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  rotation: number;
-  sequence: number; // increasing counter for insertion order
-  addedAt: number; // timestamp
-  label?: string; // e.g. PRV01A/B or Insulation01
-  objectKey?: string; // for counting
-}
-
-export interface ComponentLibrarySidebarProps {
-  components: Record<string, Record<string, ComponentItem>>;
-  onDragStart: (e: React.DragEvent, item: ComponentItem) => void;
-  onSearch?: (query: string) => void;
-  onCategoryChange?: (category: string) => void;
-  initialSearchQuery?: string;
-  selectedCategory?: string;
-  className?: string;
-}
-
-export interface CanvasPropertiesSidebarProps {
-  items: CanvasItem[];
-  selectedItemId?: number; // Should be number | undefined, not null
-  onSelectItem: (id: number) => void;
-  onDeleteItem: (id: number) => void;
-  onUpdateItem?: (id: number, patch: Partial<CanvasItem>) => void;
-  className?: string;
-  showAllItemsByDefault?: boolean;
-}
-
-export interface Connection {
-  id: number;
-  sourceItemId: number;
-  sourceGripIndex: number;
-  targetItemId: number;
-  targetGripIndex: number;
-  waypoints: { x: number; y: number }[];
-}
-
-export interface CanvasState {
-  items: CanvasItem[];
-  connections: Connection[];
-  counts: Record<string, number>; // counts keyed by objectKey
-  sequenceCounter: number; // increments each add to preserve order
-}
-
-// StagePosition and CanvasDimensions interfaces
-export interface StagePosition {
-  x: number;
-  y: number;
-}
-
-export interface CanvasDimensions {
-  width: number;
-  height: number;
-}
-
-// CanvasItemImageProps interface
-export interface CanvasItemImageProps {
-  item: CanvasItem;
-  isSelected: boolean;
-  onSelect: () => void;
-  onChange: (newAttrs: CanvasItem) => void;
-  onDragEnd?: (item: CanvasItem) => void;
-  onTransformEnd?: (item: CanvasItem) => void;
-  onGripMouseDown?: (
-    itemId: number,
-    gripIndex: number,
-    x: number,
-    y: number,
-  ) => void;
-  onGripMouseEnter?: (itemId: number, gripIndex: number) => void;
-  onGripMouseLeave?: () => void;
-  isDrawingConnection?: boolean;
-  hoveredGrip?: { itemId: number; gripIndex: number } | null;
-}
-
-// Export types
-export type ExportFormat = "png" | "jpg" | "svg" | "pdf";
-export type ExportQuality = "low" | "medium" | "high";
-
-export interface ExportOptions {
-  format: ExportFormat;
-  quality: ExportQuality;
-  scale: number;
-  includeGrid: boolean;
-  includeWatermark: boolean;
-  watermarkText: string;
-  padding: number;
-  backgroundColor: string;
-}
-
-export interface ExportPreset {
-  id: string;
-  name: string;
-  description: string;
-  options: Partial<ExportOptions>;
-}
-
-export const defaultExportOptions: ExportOptions = {
-  format: "png",
-  quality: "high",
-  scale: 2,
-  includeGrid: false,
-  includeWatermark: false,
-  watermarkText: "",
-  padding: 20,
-  backgroundColor: "#ffffff",
-};
-
-export const exportPresets: ExportPreset[] = [
-  {
-    id: "presentation",
-    name: "Presentation",
-    description: "High quality for slides",
-    options: {
-      format: "png",
-      quality: "high",
-      scale: 2,
-      includeGrid: false,
-      backgroundColor: "#ffffff",
-    },
-  },
-  {
-    id: "print",
-    name: "Print",
-    description: "High resolution for printing",
-    options: {
-      format: "pdf",
-      quality: "high",
-      scale: 3,
-      includeGrid: false,
-      padding: 40,
-    },
-  },
-  {
-    id: "web",
-    name: "Web",
-    description: "Optimized for web",
-    options: {
-      format: "jpg",
-      quality: "medium",
-      scale: 1,
-      includeGrid: false,
-    },
-  },
-  {
-    id: "technical",
-    name: "Technical",
-    description: "Include grid for documentation",
-    options: {
-      format: "svg",
-      quality: "high",
-      includeGrid: true,
-      padding: 30,
-    },
-  },
-];
 
 /** Global store shape **/
 interface EditorStore {
@@ -222,7 +45,12 @@ interface EditorStore {
   removeConnection: (editorId: string, connectionId: number) => void;
 
   // batch operations
-  updateCanvasState: (editorId: string, state: CanvasState) => void;
+  batchUpdateItems: (
+    editorId: string,
+    updates: { id: number; patch: Partial<CanvasItem> }[],
+  ) => void;
+  batchDeleteItems: (editorId: string, itemIds: number[]) => void;
+  batchRemoveConnections: (editorId: string, connectionIds: number[]) => void;
 
   // helpers
   getEditorState: (editorId: string) => CanvasState | undefined;
@@ -232,6 +60,7 @@ interface EditorStore {
   // persistence hooks (optional)
   hydrateEditor: (editorId: string, state: CanvasState) => void;
   exportEditorJSON: (editorId: string) => any;
+  updateCanvasState: (editorId: string, state: CanvasState) => void;
 }
 
 function padCount(n: number) {
@@ -271,92 +100,93 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // In useEditorStore.ts, update the addItem function:
 
-addItem: (editorId, component, opts = {}) => {
-  // ensure editor exists
-  const editor = get().editors[editorId] ?? {
-    items: [],
-    connections: [],
-    counts: {},
-    sequenceCounter: 0,
-  };
+  addItem: (editorId, component, opts = {}) => {
+    // ensure editor exists
+    const editor = get().editors[editorId] ?? {
+      items: [],
+      connections: [],
+      counts: {},
+      sequenceCounter: 0,
+    };
 
-  // create key for counts (prefer object, fallback to name)
-  const key = component.object?.trim() || component.name.trim();
+    // create key for counts (prefer object, fallback to name)
+    const key = component.object?.trim() || component.name.trim();
 
-  const currentCount = editor.counts[key] ?? 0;
-  const nextCount = currentCount + 1;
+    const currentCount = editor.counts[key] ?? 0;
+    const nextCount = currentCount + 1;
 
-  const legend = component.legend ?? "";
-  const suffix = component.suffix ?? "";
+    const legend = component.legend ?? "";
+    const suffix = component.suffix ?? "";
 
-  // DEBUG: Log the component data being added
-  console.log("Adding component:", {
-    name: component.name,
-    legend,
-    suffix,
-    objectKey: key,
-    currentCount,
-    nextCount,
-    padCount: padCount(nextCount)
-  });
+    console.log("Adding component:", {
+      name: component.name,
+      legend,
+      suffix,
+      objectKey: key,
+      currentCount,
+      nextCount,
+      padCount: padCount(nextCount)
+    });
 
-  // Generate label: Legend + Count + Suffix
-  const label = `${legend}${padCount(nextCount)}${suffix}`;
+    // Generate label: Legend + Count + Suffix
+  const label = `${legend}-${padCount(nextCount)}${suffix ? `-${suffix}` : ''}`;
 
-  const id = ++globalIdCounter;
-  const seq = (editor.sequenceCounter ?? 0) + 1;
 
-  const newItem: CanvasItem = {
-    id,
-    name: component.name,
-    icon: component.icon || "",
-    svg: component.svg || "",
-    class: component.class || "",
-    object: component.object || component.name,
-    args: component.args || [],
-    objectKey: key,
-    label, // This is the formatted label
-    legend,
-    suffix,
-    description: component.description ?? "",
-    png: component.png,
-    grips: component.grips,
-    x: typeof opts.x === "number" ? opts.x : 100,
-    y: typeof opts.y === "number" ? opts.y : 100,
-    width: typeof opts.width === "number" ? opts.width : 80,
-    height: typeof opts.height === "number" ? opts.height : 40,
-    rotation: typeof opts.rotation === "number" ? opts.rotation : 0,
-    sequence: seq,
-    addedAt: Date.now(),
-    isCustom: component.isCustom,
-  };
 
-  // DEBUG: Log the created item
-  console.log("Created CanvasItem:", {
-    label: newItem.label,
-    legend: newItem.legend,
-    suffix: newItem.suffix,
-    objectKey: newItem.objectKey
-  });
+    const id = ++globalIdCounter;
+    const seq = (editor.sequenceCounter ?? 0) + 1;
 
-  // update store
-  set((s) => ({
-    editors: {
-      ...s.editors,
-      [editorId]: {
-        items: [...(s.editors[editorId]?.items ?? editor.items), newItem],
-        connections: s.editors[editorId]?.connections ?? editor.connections,
-        counts: {
-          ...(s.editors[editorId]?.counts ?? editor.counts),
-          [key]: nextCount,
+    const newItem: CanvasItem = {
+      id,
+      name: component.name,
+      icon: component.icon || "",
+      svg: component.svg || "",
+      class: component.class || "",
+      object: component.object || component.name,
+      args: component.args || [],
+      objectKey: key,
+      label, // This is the formatted label
+      legend,
+      suffix,
+      description: component.description ?? "",
+      png: component.png,
+      grips: component.grips,
+      x: typeof opts.x === "number" ? opts.x : 100,
+      y: typeof opts.y === "number" ? opts.y : 100,
+      width: typeof opts.width === "number" ? opts.width : 80,
+      height: typeof opts.height === "number" ? opts.height : 40,
+      rotation: typeof opts.rotation === "number" ? opts.rotation : 0,
+      sequence: seq,
+      addedAt: Date.now(),
+      isCustom: component.isCustom,
+    };
+
+    // DEBUG: Log the created item
+    console.log("Created CanvasItem:", {
+      label: newItem.label,
+      legend: newItem.legend,
+      suffix: newItem.suffix,
+      objectKey: newItem.objectKey
+    });
+
+    // update store
+    set((s) => ({
+      editors: {
+        ...s.editors,
+        [editorId]: {
+          items: [...(s.editors[editorId]?.items ?? editor.items), newItem],
+          connections: s.editors[editorId]?.connections ?? editor.connections,
+          counts: {
+            ...(s.editors[editorId]?.counts ?? editor.counts),
+            [key]: nextCount,
+          },
+          sequenceCounter: seq,
         },
-        sequenceCounter: seq,
       },
-    },
-  }));
+    }));
 
-  return newItem;
-},
+    return newItem;
+  },
 
   updateItem: (editorId, itemId, patch) => {
     set((s) => {
@@ -460,14 +290,84 @@ addItem: (editorId, component, opts = {}) => {
           ...s.editors,
           [editorId]: {
             ...ed,
-            connections: ed.connections.filter((c) => c.id !== connectionId),
+            connections: ed.connections.filter((c: Connection) => c.id !== connectionId),
           },
         },
       };
     });
   },
 
-  updateCanvasState: (editorId, state) => {
+  batchUpdateItems: (editorId: string, updates: { id: number; patch: Partial<CanvasItem> }[]) => {
+    set((s: EditorStore) => {
+      const ed = s.editors[editorId];
+      if (!ed) return s;
+
+      const nextItems = [...ed.items];
+      updates.forEach(({ id, patch }) => {
+        const index = nextItems.findIndex((it) => it.id === id);
+        if (index !== -1) {
+          nextItems[index] = { ...nextItems[index], ...patch };
+        }
+      });
+
+      return {
+        editors: {
+          ...s.editors,
+          [editorId]: {
+            ...ed,
+            items: nextItems,
+          },
+        },
+      };
+    });
+  },
+
+  batchDeleteItems: (editorId: string, itemIds: number[]) => {
+    set((s: EditorStore) => {
+      const ed = s.editors[editorId];
+      if (!ed) return s;
+
+      const idsSet = new Set(itemIds);
+
+      // Also remove connections associated with these items
+      const filteredConnections = ed.connections.filter(
+        (conn: Connection) =>
+          !idsSet.has(conn.sourceItemId) && !idsSet.has(conn.targetItemId),
+      );
+
+      return {
+        editors: {
+          ...s.editors,
+          [editorId]: {
+            ...ed,
+            items: ed.items.filter((it: CanvasItem) => !idsSet.has(it.id)),
+            connections: filteredConnections,
+          },
+        },
+      };
+    });
+  },
+
+  batchRemoveConnections: (editorId: string, connectionIds: number[]) => {
+    set((s: EditorStore) => {
+      const ed = s.editors[editorId];
+      if (!ed) return s;
+
+      const idsSet = new Set(connectionIds);
+
+      return {
+        editors: {
+          ...s.editors,
+          [editorId]: {
+            ...ed,
+            connections: ed.connections.filter((c: Connection) => !idsSet.has(c.id)),
+          },
+        },
+      };
+    });
+  },
+
+  updateCanvasState: (editorId: string, state: CanvasState) => {
     set((s) => ({
       editors: {
         ...s.editors,

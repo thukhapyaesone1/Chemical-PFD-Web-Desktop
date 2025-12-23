@@ -40,10 +40,13 @@ import { useExport } from "@/hooks/useExport";
 import { ExportOptions } from "@/components/Canvas/types";
 import {
   useEditorStore,
+} from "@/store/useEditorStore";
+import {
   type ComponentItem,
   type CanvasItem,
   type CanvasState,
-} from "@/store/useEditorStore";
+  type Connection,
+} from "@/components/Canvas/types";
 import { ExportReportModal } from "@/components/Canvas/ExportReportModal";
 
 type Shortcut = {
@@ -61,9 +64,8 @@ export default function Editor() {
   const navigate = useNavigate();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [historyReady, setHistoryReady] = useState(false);
-  const [historyInitialState, setHistoryInitialState] =
-    useState<CanvasState | null>(null);
+  // State variables related to history were removed as they were unused
+
 
 
   const isCtrlOrCmd = (e: KeyboardEvent) => e.ctrlKey || e.metaKey;
@@ -182,13 +184,10 @@ export default function Editor() {
 
   // Use items and connections from history state
 
-  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
+  const [selectedConnectionIds, setSelectedConnectionIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Connection State
-  const [selectedConnectionId, setSelectedConnectionId] = useState<
-    number | null
-  >(null);
   const [isDrawingConnection, setIsDrawingConnection] = useState(false);
   const [tempConnection, setTempConnection] = useState<{
     sourceItemId: number;
@@ -210,7 +209,7 @@ export default function Editor() {
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
 
   // Refs
-  const stageRef = useRef<any>(null); // loosened type to avoid runtime null issues
+  const stageRef = useRef<Konva.Stage>(null); // loosened type to avoid runtime null issues
   const containerRef = useRef<HTMLDivElement>(null);
   const dragItemRef = useRef<ComponentItem | null>(null);
 
@@ -246,17 +245,21 @@ export default function Editor() {
       handler: handleCenterToContent,
     },
     {
-      key: "backspace",
+      key: "d",
       label: "Delete Selection",
-      display: "Ctrl + Backspace",
-      requireCtrl: true,
+      display: "d",
+      requireCtrl: false,
       handler: () => {
-        if (selectedConnectionId !== null && projectId) {
-          editorStore.removeConnection(projectId, selectedConnectionId);
-          setSelectedConnectionId(null);
-        } else if (selectedItemId !== null && projectId) {
-          editorStore.deleteItem(projectId, selectedItemId);
-          setSelectedItemId(null);
+        if (!projectId) return;
+
+        if (selectedConnectionIds.size > 0) {
+          editorStore.batchRemoveConnections(projectId, Array.from(selectedConnectionIds));
+          setSelectedConnectionIds(new Set());
+        }
+
+        if (selectedItemIds.size > 0) {
+          editorStore.batchDeleteItems(projectId, Array.from(selectedItemIds));
+          setSelectedItemIds(new Set());
         }
       },
     },
@@ -290,8 +293,8 @@ export default function Editor() {
 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    selectedConnectionId,
-    selectedItemId,
+    selectedConnectionIds,
+    selectedItemIds,
     undo,
     redo,
     projectId,
@@ -362,7 +365,7 @@ export default function Editor() {
           });
 
 
-          setSelectedItemId(newItem.id);
+          setSelectedItemIds(new Set([newItem.id]));
         };
 
         img.onload = () => {
@@ -417,7 +420,7 @@ export default function Editor() {
       });
     } else {
       // Pan logic
-      setStagePos((prev) => ({
+      setStagePos((prev: { x: number; y: number }) => ({
         x: prev.x - e.evt.deltaX,
         y: prev.y - e.evt.deltaY,
       }));
@@ -429,18 +432,23 @@ export default function Editor() {
 
     editorStore.deleteItem(projectId, itemId);
 
-    if (selectedItemId === itemId) setSelectedItemId(null);
+    setSelectedItemIds((prev: Set<number>) => {
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
   };
 
   const handleUpdateItem = (itemId: number, updates: Partial<CanvasItem>) => {
     if (!projectId) {
-      // update local state so UI can still reflect changes while editing without a project
+      // ... (local state update logic omitted for brevity, keeping existing structure if possible but adapting)
+      // For local state only (no project ID), we just simplisticly update.
       setCanvasState((prev) => {
         if (!prev) return prev;
 
         return {
           ...prev,
-          items: prev.items.map((it) =>
+          items: prev.items.map((it: CanvasItem) =>
             it.id === itemId ? { ...it, ...updates } : it
           ),
         };
@@ -449,17 +457,56 @@ export default function Editor() {
       return;
     }
 
+    // Multi-drag logic
+    // If we are moving an item that is part of the selection, move all selected items
+    if (selectedItemIds.has(itemId) && (updates.x !== undefined || updates.y !== undefined)) {
+      const currentItem = droppedItems.find(i => i.id === itemId);
+      if (currentItem) {
+        const deltaX = (updates.x ?? currentItem.x) - currentItem.x;
+        const deltaY = (updates.y ?? currentItem.y) - currentItem.y;
+
+        if (deltaX !== 0 || deltaY !== 0) {
+          const batchUpdates = droppedItems
+            .filter(item => selectedItemIds.has(item.id))
+            .map(item => ({
+              id: item.id,
+              patch: {
+                x: item.x + deltaX,
+                y: item.y + deltaY
+              }
+            }));
+
+          editorStore.batchUpdateItems(projectId, batchUpdates);
+          return;
+        }
+      }
+    }
+
     editorStore.updateItem(projectId, itemId, updates);
-
-
   };
 
-  const handleSelectItem = (itemId: number) => {
-    setSelectedItemId(itemId);
+  const handleSelectItem = (itemId: number, e?: Konva.KonvaEventObject<MouseEvent>) => {
+    const isCtrl = e?.evt.ctrlKey || e?.evt.metaKey;
+
+    setSelectedItemIds(prev => {
+      const next = new Set(isCtrl ? prev : []);
+      if (isCtrl && prev.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+
+    // Clear connections if not adding to selection (exclusive select)
+    if (!isCtrl) {
+      setSelectedConnectionIds(new Set());
+    }
   };
 
   const handleClearSelection = () => {
-    setSelectedItemId(null);
+    setSelectedItemIds(new Set());
+    setSelectedConnectionIds(new Set());
   };
 
   // --- Connection Handlers ---
@@ -490,7 +537,7 @@ export default function Editor() {
 
       setIsDrawingConnection(false);
       setTempConnection(null);
-      setSelectedConnectionId(newConnection.id);
+      setSelectedConnectionIds(new Set([newConnection.id]));
 
       return;
     }
@@ -523,7 +570,7 @@ export default function Editor() {
         const pointer = stage.getRelativePointerPosition();
 
         if (pointer) {
-          setTempConnection((prev) =>
+          setTempConnection((prev: any) =>
             prev
               ? {
                 ...prev,
@@ -639,11 +686,17 @@ export default function Editor() {
               </DropdownItem>
               <DropdownItem
                 key="delete"
-                onPress={() =>
-                  selectedItemId && handleDeleteItem(selectedItemId)
-                }
+                onPress={() => {
+                  if (selectedItemIds.size > 0 || selectedConnectionIds.size > 0) {
+                    // Trigger delete logic (reuse shortcut handler logic or verify functionality)
+                    if (projectId && selectedItemIds.size > 0) editorStore.batchDeleteItems(projectId, Array.from(selectedItemIds));
+                    if (projectId && selectedConnectionIds.size > 0) editorStore.batchRemoveConnections(projectId, Array.from(selectedConnectionIds));
+                    setSelectedItemIds(new Set());
+                    setSelectedConnectionIds(new Set());
+                  }
+                }}
               >
-                Delete Selected (Del)
+                Delete Selected (d)
               </DropdownItem>
               <DropdownItem key="clear" onPress={handleClearSelection}>
                 Clear Selection
@@ -790,7 +843,7 @@ export default function Editor() {
                   const pointer = stage.getRelativePointerPosition();
 
                   if (pointer) {
-                    setTempConnection((prev) =>
+                    setTempConnection((prev: any) =>
                       prev
                         ? {
                           ...prev,
@@ -810,7 +863,6 @@ export default function Editor() {
               // Otherwise, click on empty stage deselects
               if (clickedOnEmpty) {
                 handleClearSelection();
-                setSelectedConnectionId(null);
               }
             }}
             onMouseMove={() => {
@@ -832,17 +884,28 @@ export default function Editor() {
           >
             <Layer>
               {/* Render Connections */}
-              {connections.map((connection) => (
+              {connections.map((connection: Connection) => (
                 <ConnectionLine
                   key={connection.id}
                   connection={connection}
-                  isSelected={connection.id === selectedConnectionId}
+                  isSelected={selectedConnectionIds.has(connection.id)}
                   items={droppedItems}
-                  pathData={connectionPaths[connection.id]}
+                  pathData={connectionPaths[connection.id]?.pathData}
+                  arrowAngle={connectionPaths[connection.id]?.arrowAngle}
+                  targetPosition={connectionPaths[connection.id]?.endPoint}
                   points={[]}
-                  onSelect={() => {
-                    setSelectedConnectionId(connection.id);
-                    setSelectedItemId(null);
+                  onSelect={(e: Konva.KonvaEventObject<MouseEvent>) => {
+                    const isCtrl = e?.evt.ctrlKey || e?.evt.metaKey;
+                    setSelectedConnectionIds((prev: Set<number>) => {
+                      const next = new Set(isCtrl ? prev : []);
+                      if (isCtrl && prev.has(connection.id)) {
+                        next.delete(connection.id);
+                      } else {
+                        next.add(connection.id);
+                      }
+                      return next;
+                    });
+                    if (!isCtrl) setSelectedItemIds(new Set());
                   }}
                 />
               ))}
@@ -865,12 +928,12 @@ export default function Editor() {
               )}
 
               {/* Render Components */}
-              {droppedItems.map((item) => (
+              {droppedItems.map((item: CanvasItem) => (
                 <CanvasItemImage
                   key={item.id}
                   hoveredGrip={hoveredGrip}
                   isDrawingConnection={isDrawingConnection}
-                  isSelected={item.id === selectedItemId}
+                  isSelected={selectedItemIds.has(item.id)}
                   item={item}
                   onChange={(newAttrs) =>
                     handleUpdateItem(newAttrs.id, newAttrs)
@@ -878,7 +941,7 @@ export default function Editor() {
                   onGripMouseDown={handleGripMouseDown}
                   onGripMouseEnter={handleGripMouseEnter}
                   onGripMouseLeave={handleGripMouseLeave}
-                  onSelect={() => handleSelectItem(item.id)}
+                  onSelect={(e) => handleSelectItem(item.id, e)}
                 />
               ))}
             </Layer>
@@ -1027,16 +1090,16 @@ export default function Editor() {
 
           {/* Selection Guidance Overlay */}
           {!isDrawingConnection &&
-            (selectedItemId !== null || selectedConnectionId !== null) && (
+            (selectedItemIds.size > 0 || selectedConnectionIds.size > 0) && (
               <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none">
                 <div className="px-4 py-2 bg-black/70 backdrop-blur text-white text-sm rounded-full shadow-lg border border-white/10 flex items-center gap-3">
                   <span className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                    Selection Active
+                    {selectedItemIds.size + selectedConnectionIds.size} Selected
                   </span>
                   <div className="w-px h-3 bg-white/20" />
                   <span className="text-white/80 text-xs">
-                    Press Ctrl+Backspace to delete selection
+                    Press 'd' to delete selection • Ctrl+Click to add more
                   </span>
                 </div>
               </div>
@@ -1063,7 +1126,7 @@ export default function Editor() {
       rounded-md bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700
       hover:bg-gray-100 dark:hover:bg-gray-700"
             title={rightCollapsed ? "Expand" : "Collapse"}
-            onClick={() => setRightCollapsed((v) => !v)}
+            onClick={() => setRightCollapsed((v: boolean) => !v)}
           >
             {!rightCollapsed ? (
               <TbLayoutSidebarRightCollapse />
@@ -1076,9 +1139,9 @@ export default function Editor() {
             <CanvasPropertiesSidebar
               showAllItemsByDefault
               items={droppedItems}
-              selectedItemId={selectedItemId || undefined}
+              selectedItemId={selectedItemIds.size === 1 ? Array.from(selectedItemIds)[0] : undefined}
               onDeleteItem={handleDeleteItem}
-              onSelectItem={handleSelectItem}
+              onSelectItem={(id: number) => setSelectedItemIds(new Set([id]))}
               onUpdateItem={handleUpdateItem}
             />
           )}

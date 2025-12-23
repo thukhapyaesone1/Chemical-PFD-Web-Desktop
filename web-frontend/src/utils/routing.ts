@@ -73,7 +73,14 @@ const getIntersectionT = (seg1: LineSegment, seg2: LineSegment): number | null =
 
 // --- Main Export ---
 // Returns a map of connection ID -> SVG Path Data String
-export const calculateManualPathsWithBridges = (connections: Connection[], items: CanvasItem[]): Record<number, string> => {
+// Returns a map of connection ID -> { pathData, arrowAngle, endPoint }
+export interface PathMetadata {
+    pathData: string;
+    endPoint?: Point;
+    arrowAngle?: number;
+}
+
+export const calculateManualPathsWithBridges = (connections: Connection[], items: CanvasItem[]): Record<number, PathMetadata> => {
 
     // 1. Build geometry for all lines
     const rawLines: { id: number; segments: LineSegment[] }[] = [];
@@ -113,7 +120,7 @@ export const calculateManualPathsWithBridges = (connections: Connection[], items
     // flattened list of all segments for collision checking
     const allSegments = rawLines.flatMap(r => r.segments);
 
-    const finalPaths: Record<number, string> = {};
+    const finalPaths: Record<number, PathMetadata> = {};
 
     // 2. Process each line to build SVG path
     for (const line of rawLines) {
@@ -180,7 +187,29 @@ export const calculateManualPathsWithBridges = (connections: Connection[], items
             pathData += ` L ${segEnd.x} ${segEnd.y}`;
         }
 
-        finalPaths[line.id] = pathData;
+        // Calculate arrow angle based on the last segment's direction
+        let arrowAngle = 0;
+        let endPoint: Point | undefined;
+
+        if (line.segments.length > 0) {
+            const lastSeg = line.segments[line.segments.length - 1];
+
+            // Calculate offset position for the arrow (e.g., 12px back)
+            // endPoint = p2 - dir * 12
+            const arrowOffset = 12;
+            endPoint = {
+                x: lastSeg.p2.x - lastSeg.dir.x * arrowOffset,
+                y: lastSeg.p2.y - lastSeg.dir.y * arrowOffset
+            };
+
+            // atan2(y, x) returns angle in radians. Convert to degrees.
+            // Konva rotation is in degrees.
+            // RegularPolygon (triangle) points UP at 0 deg, but 0 rad is RIGHT. 
+            // So we add 90 degrees to align it with the vector.
+            arrowAngle = Math.atan2(lastSeg.dir.y, lastSeg.dir.x) * (180 / Math.PI) + 90;
+        }
+
+        finalPaths[line.id] = { pathData, endPoint, arrowAngle };
     }
 
     return finalPaths;
