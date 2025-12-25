@@ -48,7 +48,7 @@ import {
   type Connection,
 } from "@/components/Canvas/types";
 import { ExportReportModal } from "@/components/Canvas/ExportReportModal";
-
+import { TbGridDots, TbGridPattern } from "react-icons/tb";
 type Shortcut = {
   key: string;
   label: string;
@@ -72,7 +72,7 @@ export default function Editor() {
   const [gridSize, setGridSize] = useState(20); // Grid size in pixels (at scale 1)
 
   const isCtrlOrCmd = (e: KeyboardEvent) => e.ctrlKey || e.metaKey;
-  
+
   // ---------- Build initial state ----------
   const editorStore = useEditorStore();
   const initialEditorState = useMemo<CanvasState>(() => {
@@ -726,55 +726,55 @@ export default function Editor() {
   // -------------------------------------------------------------------------------
   // -------------------------------------------------------------------------------
   const GridLayer = React.memo(({
-  width,
-  height,
-  gridSize,
-  showGrid,
-}: {
-  width: number;
-  height: number;
-  gridSize: number;
-  showGrid: boolean;
-}) => {
-  if (!showGrid) return null;
+    width,
+    height,
+    gridSize,
+    showGrid,
+  }: {
+    width: number;
+    height: number;
+    gridSize: number;
+    showGrid: boolean;
+  }) => {
+    if (!showGrid) return null;
 
-  return (
-    <Layer listening={false}>
-      <Shape
-        stroke="#9ca3af"
-        strokeWidth={1}
-        opacity={0.3}
-        perfectDrawEnabled={false}
-        sceneFunc={(context: CanvasRenderingContext2D, shape: Konva.Shape) => {
-          context.beginPath();
-          
-          // These bounds match your previous logic (-5000 to +5000)
-          // Ideally, you should calculate this based on the visible viewport,
-          // but this is much faster than the array method even with large bounds.
-          const startX = -5000;
-          const endX = width + 5000;
-          const startY = -5000;
-          const endY = height + 5000;
+    return (
+      <Layer listening={false}>
+        <Shape
+          stroke="#9ca3af"
+          strokeWidth={1}
+          opacity={0.3}
+          perfectDrawEnabled={false}
+          sceneFunc={(context: CanvasRenderingContext2D, shape: Konva.Shape) => {
+            context.beginPath();
 
-          // Vertical Lines
-          for (let x = startX; x <= endX; x += gridSize) {
-            context.moveTo(x, startY);
-            context.lineTo(x, endY);
-          }
+            // These bounds match your previous logic (-5000 to +5000)
+            // Ideally, you should calculate this based on the visible viewport,
+            // but this is much faster than the array method even with large bounds.
+            const startX = -5000;
+            const endX = width + 5000;
+            const startY = -5000;
+            const endY = height + 5000;
 
-          // Horizontal Lines
-          for (let y = startY; y <= endY; y += gridSize) {
-            context.moveTo(startX, y);
-            context.lineTo(endX, y);
-          }
+            // Vertical Lines
+            for (let x = startX; x <= endX; x += gridSize) {
+              context.moveTo(x, startY);
+              context.lineTo(x, endY);
+            }
 
-          // Konva specific method to apply styles (stroke, color, etc.)
-          context.fillStrokeShape(shape);
-        }}
-      />
-    </Layer>
-  );
-});
+            // Horizontal Lines
+            for (let y = startY; y <= endY; y += gridSize) {
+              context.moveTo(startX, y);
+              context.lineTo(endX, y);
+            }
+
+            // Konva specific method to apply styles (stroke, color, etc.)
+            context.fillStrokeShape(shape);
+          }}
+        />
+      </Layer>
+    );
+  });
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
@@ -1109,7 +1109,22 @@ export default function Editor() {
               </div>
 
               <div className="w-px h-3 bg-gray-300" />
-
+              {/* Grid Toggle Button */}
+              <button
+                className="w-8 h-8 flex items-center justify-center rounded-full
+      bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700
+      border border-gray-300 dark:border-gray-600
+      shadow-sm hover:shadow
+      transition-all duration-200"
+                title={showGrid ? "Hide Grid" : "Show Grid"}
+                onClick={handleToggleGrid}
+              >
+                {showGrid ? (
+                  <TbGridDots className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                ) : (
+                  <TbGridPattern className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                )}
+              </button>
               {/* Zoom Controls */}
               <div className="flex items-center gap-2">
                 {/* Zoom Out Button */}
