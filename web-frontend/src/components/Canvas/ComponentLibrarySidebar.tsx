@@ -196,7 +196,10 @@ export const CanvasPropertiesSidebar = ({
   }, [selectedItemId]);
 
   // Sort items by name for the list view
-  const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
+  const sortedItems = [...items].sort(
+    (a, b) => a.sequence - b.sequence
+  );
+
 
   return (
     <div
