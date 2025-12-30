@@ -6,7 +6,6 @@ class Project(models.Model):
     user = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField( auto_now=True)
-    thumbnail = models.ImageField(upload_to="thumbnails/", null=True, blank=True)
 
     def __str__(self):
         return self.name
