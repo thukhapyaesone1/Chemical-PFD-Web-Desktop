@@ -5,7 +5,7 @@ export function exportToCSV(
     tagNo: string;
     type: string;
     description: string;
-  }[]
+  }[],
 ) {
   const header = ["Sl No", "Tag No", "Type", "Description"];
   const csv = [
@@ -16,7 +16,7 @@ export function exportToCSV(
         `"${r.tagNo}"`,
         `"${r.type}"`,
         `"${r.description.replace(/"/g, '""')}"`,
-      ].join(",")
+      ].join(","),
     ),
   ].join("\n");
 
@@ -24,6 +24,7 @@ export function exportToCSV(
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
+
   a.href = url;
   a.download = `equipment-report-${Date.now()}.csv`;
   a.click();

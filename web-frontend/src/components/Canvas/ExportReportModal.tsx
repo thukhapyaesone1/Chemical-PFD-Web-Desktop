@@ -1,6 +1,5 @@
 // src/components/Export/ExportReportModal.tsx
 import React, { useMemo } from "react";
-import { useEditorStore } from "@/store/useEditorStore";
 import {
   Table,
   TableHeader,
@@ -17,6 +16,8 @@ import {
   Tooltip,
 } from "@heroui/react";
 import { FiDownload, FiPrinter, FiFileText } from "react-icons/fi";
+
+import { useEditorStore } from "@/store/useEditorStore";
 
 interface ExportReportModalProps {
   editorId: string;
@@ -41,7 +42,7 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
   // Transform editor items to report items
   const items = useMemo(() => {
     if (!editorState?.items) return [];
-    
+
     return [...editorState.items]
       .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
       .map((item, index) => ({
@@ -49,7 +50,7 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
         tagNo: item.label || `TAG-${index + 1}`, // Use label property
         type: item.object || item.name || "N/A", // Use object or name
         description: item.description || "No description",
-        originalItem: item
+        originalItem: item,
       })) as ReportItem[];
   }, [editorState]);
 
@@ -60,16 +61,18 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
     const headers = ["Sl No", "Tag No", "Type", "Description"];
     const csvContent = [
       headers.join(","),
-      ...items.map(item => 
-        `"${item.slNo}","${item.tagNo}","${item.type}","${item.description}"`
-      )
+      ...items.map(
+        (item) =>
+          `"${item.slNo}","${item.tagNo}","${item.type}","${item.description}"`,
+      ),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
+
     a.href = url;
-    a.download = `equipment-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `equipment-report-${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -79,7 +82,8 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
   // Handle Print/PDF with better print styling
   const handlePrint = () => {
     // Create a print-friendly version
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open("", "_blank");
+
     if (!printWindow) return;
 
     const printContent = `
@@ -113,14 +117,18 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
               </tr>
             </thead>
             <tbody>
-              ${items.map(item => `
+              ${items
+                .map(
+                  (item) => `
                 <tr>
                   <td>${item.slNo}</td>
                   <td><strong>${item.tagNo}</strong></td>
                   <td>${item.type}</td>
                   <td>${item.description}</td>
                 </tr>
-              `).join('')}
+              `,
+                )
+                .join("")}
             </tbody>
           </table>
           <div class="footer">
@@ -166,25 +174,37 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20">
               <div className="text-2xl font-bold">{items.length}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Total Items</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Total Items
+              </div>
             </div>
             <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20">
               <div className="text-2xl font-bold">
-                {new Set(items.map(i => i.type)).size}
+                {new Set(items.map((i) => i.type)).size}
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Unique Types</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Unique Types
+              </div>
             </div>
             <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20">
               <div className="text-2xl font-bold">
-                {items.filter(i => i.description && i.description !== "No description").length}
+                {
+                  items.filter(
+                    (i) => i.description && i.description !== "No description",
+                  ).length
+                }
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">With Description</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                With Description
+              </div>
             </div>
             <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/30 dark:to-amber-800/20">
               <div className="text-2xl font-bold">
-                {items.filter(i => i.tagNo.startsWith('TAG-')).length}
+                {items.filter((i) => i.tagNo.startsWith("TAG-")).length}
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Auto-tagged</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Auto-tagged
+              </div>
             </div>
           </div>
 
@@ -201,12 +221,12 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
 
             <div className="max-h-[400px] overflow-auto rounded-lg border border-gray-200 dark:border-gray-800">
               <Table
+                removeWrapper
                 aria-label="Equipment Report Table"
                 classNames={{
                   base: "min-h-[200px]",
                   wrapper: "shadow-none",
                 }}
-                removeWrapper
               >
                 <TableHeader>
                   <TableColumn className="bg-gray-50 dark:bg-gray-800">
@@ -223,15 +243,17 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
                   </TableColumn>
                 </TableHeader>
                 <TableBody
-                  items={items}
                   emptyContent={
                     <div className="py-12 text-center">
-                      <div className="text-gray-500 mb-2">No components found</div>
+                      <div className="text-gray-500 mb-2">
+                        No components found
+                      </div>
                       <div className="text-sm text-gray-400">
                         Add components to your diagram to generate a report
                       </div>
                     </div>
                   }
+                  items={items}
                 >
                   {(item) => (
                     <TableRow key={`${item.slNo}-${item.tagNo}`}>
@@ -288,10 +310,10 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
             <Tooltip content="Export as CSV file">
               <Button
                 color="primary"
-                variant="bordered"
-                startContent={<FiFileText />}
-                onPress={() => exportToCSV(items)}
                 isDisabled={items.length === 0}
+                startContent={<FiFileText />}
+                variant="bordered"
+                onPress={() => exportToCSV(items)}
               >
                 CSV
               </Button>
@@ -299,9 +321,9 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
             <Tooltip content="Print or save as PDF">
               <Button
                 color="primary"
+                isDisabled={items.length === 0}
                 startContent={<FiPrinter />}
                 onPress={handlePrint}
-                isDisabled={items.length === 0}
               >
                 Print/PDF
               </Button>

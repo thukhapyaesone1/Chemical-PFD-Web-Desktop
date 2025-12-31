@@ -1,5 +1,6 @@
 // src/store/useEditorStore.ts
 import { create } from "zustand";
+
 import {
   ComponentItem,
   CanvasItem,
@@ -9,7 +10,10 @@ import {
 
 // 1. Define what a "History Snapshot" looks like
 // We only save the data, not the history arrays themselves
-type EditorSnapshot = Pick<CanvasState, "items" | "connections" | "counts" | "sequenceCounter">;
+type EditorSnapshot = Pick<
+  CanvasState,
+  "items" | "connections" | "counts" | "sequenceCounter"
+>;
 
 // 2. Extend the stored editor state to include history buffers
 interface EditorStateWithHistory extends CanvasState {
@@ -38,15 +42,17 @@ interface EditorStore {
   addItem: (
     editorId: string,
     component: Omit<ComponentItem, "id">,
-    opts?: Partial<Pick<CanvasItem, "x" | "y" | "width" | "height" | "rotation">>
+    opts?: Partial<
+      Pick<CanvasItem, "x" | "y" | "width" | "height" | "rotation">
+    >,
   ) => CanvasItem | undefined;
 
   updateItem: (
     editorId: string,
     itemId: number,
-    patch: Partial<CanvasItem>
+    patch: Partial<CanvasItem>,
   ) => void;
-  
+
   deleteItem: (editorId: string, itemId: number) => void;
 
   // --- CONNECTION OPS ---
@@ -54,14 +60,14 @@ interface EditorStore {
   updateConnection: (
     editorId: string,
     connectionId: number,
-    patch: Partial<Connection>
+    patch: Partial<Connection>,
   ) => void;
   removeConnection: (editorId: string, connectionId: number) => void;
 
   // --- BATCH OPS ---
   batchUpdateItems: (
     editorId: string,
-    updates: { id: number; patch: Partial<CanvasItem> }[]
+    updates: { id: number; patch: Partial<CanvasItem> }[],
   ) => void;
   batchDeleteItems: (editorId: string, itemIds: number[]) => void;
   batchRemoveConnections: (editorId: string, connectionIds: number[]) => void;
@@ -117,7 +123,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   removeEditor: (editorId) =>
     set((s) => {
       const next = { ...s.editors };
+
       delete next[editorId];
+
       return { editors: next };
     }),
 
@@ -128,11 +136,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   undo: (editorId) =>
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed || ed.past.length === 0) return s;
 
       const previous = ed.past[ed.past.length - 1]; // The state we go back to
       const newPast = ed.past.slice(0, ed.past.length - 1);
-      
+
       const currentSnapshot = createSnapshot(ed); // Save where we are now to future
 
       return {
@@ -151,6 +160,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   redo: (editorId) =>
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed || ed.future.length === 0) return s;
 
       const next = ed.future[0]; // The state we go forward to
@@ -174,7 +184,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   clearHistory: (editorId) =>
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s;
+
       return {
         editors: {
           ...s.editors,
@@ -189,11 +201,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   canUndo: (editorId) => {
     const ed = get().editors[editorId];
+
     return ed ? ed.past.length > 0 : false;
   },
 
   canRedo: (editorId) => {
     const ed = get().editors[editorId];
+
     return ed ? ed.future.length > 0 : false;
   },
 
@@ -204,6 +218,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   addItem: (editorId, component, opts = {}) => {
     const s = get();
     const editor = s.editors[editorId];
+
     if (!editor) return undefined;
 
     // --- 1. RECORD HISTORY ---
@@ -271,6 +286,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateItem: (editorId, itemId, patch) => {
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s;
 
       // --- RECORD HISTORY ---
@@ -283,7 +299,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           [editorId]: {
             ...ed,
             items: ed.items.map((it) =>
-              it.id === itemId ? { ...it, ...patch } : it
+              it.id === itemId ? { ...it, ...patch } : it,
             ),
             past: [...ed.past, snapshot],
             future: [],
@@ -296,6 +312,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   deleteItem: (editorId, itemId) => {
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s;
 
       // --- RECORD HISTORY ---
@@ -303,7 +320,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // ----------------------
 
       const filteredConnections = ed.connections.filter(
-        (conn) => conn.sourceItemId !== itemId && conn.targetItemId !== itemId
+        (conn) => conn.sourceItemId !== itemId && conn.targetItemId !== itemId,
       );
 
       return {
@@ -327,6 +344,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s; // Safety check
 
       // --- RECORD HISTORY ---
@@ -352,6 +370,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateConnection: (editorId, connectionId, patch) => {
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s;
 
       // --- RECORD HISTORY ---
@@ -364,7 +383,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           [editorId]: {
             ...ed,
             connections: ed.connections.map((conn) =>
-              conn.id === connectionId ? { ...conn, ...patch } : conn
+              conn.id === connectionId ? { ...conn, ...patch } : conn,
             ),
             past: [...ed.past, snapshot],
             future: [],
@@ -377,6 +396,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   removeConnection: (editorId, connectionId) => {
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s;
 
       // --- RECORD HISTORY ---
@@ -400,6 +420,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   batchUpdateItems: (editorId, updates) => {
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s;
 
       // --- RECORD HISTORY ---
@@ -407,8 +428,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // ----------------------
 
       const nextItems = [...ed.items];
+
       updates.forEach(({ id, patch }) => {
         const index = nextItems.findIndex((it) => it.id === id);
+
         if (index !== -1) {
           nextItems[index] = { ...nextItems[index], ...patch };
         }
@@ -431,6 +454,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   batchDeleteItems: (editorId, itemIds) => {
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s;
 
       // --- RECORD HISTORY ---
@@ -439,7 +463,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
       const idsSet = new Set(itemIds);
       const filteredConnections = ed.connections.filter(
-        (conn) => !idsSet.has(conn.sourceItemId) && !idsSet.has(conn.targetItemId)
+        (conn) =>
+          !idsSet.has(conn.sourceItemId) && !idsSet.has(conn.targetItemId),
       );
 
       return {
@@ -460,6 +485,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   batchRemoveConnections: (editorId, connectionIds) => {
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s;
 
       // --- RECORD HISTORY ---
@@ -486,20 +512,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   resetCounts: (editorId) => {
     set((s) => {
       const ed = s.editors[editorId];
+
       if (!ed) return s;
-      
-      // Optional: Do we want undo capability for resetting counts? 
+
+      // Optional: Do we want undo capability for resetting counts?
       // Assuming yes for consistency:
       const snapshot = createSnapshot(ed);
 
       return {
         editors: {
           ...s.editors,
-          [editorId]: { 
-            ...ed, 
+          [editorId]: {
+            ...ed,
             counts: {},
             past: [...ed.past, snapshot],
-            future: []
+            future: [],
           },
         },
       };
@@ -512,30 +539,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       editors: {
         ...s.editors,
         [editorId]: {
-            ...state,
-            past: [], // Reset history on load
-            future: []
+          ...state,
+          past: [], // Reset history on load
+          future: [],
         },
       },
     })),
 
   updateCanvasState: (editorId, state) => {
     set((s) => {
-        // If this is a bulk update, we might want to history track it
-        const ed = s.editors[editorId];
-        // If editor exists, save history
-        const newPast = ed ? [...ed.past, createSnapshot(ed)] : [];
+      // If this is a bulk update, we might want to history track it
+      const ed = s.editors[editorId];
+      // If editor exists, save history
+      const newPast = ed ? [...ed.past, createSnapshot(ed)] : [];
 
-        return {
-            editors: {
-                ...s.editors,
-                [editorId]: {
-                    ...state,
-                    past: newPast,
-                    future: []
-                },
-            },
-        }
+      return {
+        editors: {
+          ...s.editors,
+          [editorId]: {
+            ...state,
+            past: newPast,
+            future: [],
+          },
+        },
+      };
     });
   },
 
@@ -543,15 +570,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   getItemsInOrder: (editorId) => {
     const ed = get().editors[editorId];
+
     if (!ed) return [];
+
     return [...ed.items].sort((a, b) => a.sequence - b.sequence);
   },
 
   exportEditorJSON: (editorId) => {
     const ed = get().editors[editorId];
+
     // We usually exclude past/future from exports
     if (!ed) return null;
     const { past, future, ...data } = ed;
+
     return JSON.parse(JSON.stringify(data));
   },
 }));

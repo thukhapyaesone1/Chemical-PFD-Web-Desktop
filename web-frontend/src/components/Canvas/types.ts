@@ -80,7 +80,12 @@ export interface CanvasItemImageProps {
   onChange: (newAttrs: CanvasItem) => void;
   onDragEnd?: (item: CanvasItem) => void;
   onTransformEnd?: (item: CanvasItem) => void;
-  onGripMouseDown?: (itemId: number, gripIndex: number, x: number, y: number) => void;
+  onGripMouseDown?: (
+    itemId: number,
+    gripIndex: number,
+    x: number,
+    y: number,
+  ) => void;
   onGripMouseEnter?: (itemId: number, gripIndex: number) => void;
   onGripMouseLeave?: () => void;
   isDrawingConnection?: boolean;
@@ -97,9 +102,9 @@ export interface CanvasPropertiesSidebarProps {
   showAllItemsByDefault?: boolean;
 }
 
-// Export image types 
-export type ExportFormat = 'png' | 'jpg' | 'svg' | 'pdf';
-export type ExportQuality = 'low' | 'medium' | 'high';
+// Export image types
+export type ExportFormat = "png" | "jpg" | "svg" | "pdf";
+export type ExportQuality = "low" | "medium" | "high";
 
 export interface ExportOptions {
   format: ExportFormat;
@@ -120,59 +125,59 @@ export interface ExportPreset {
 }
 
 export const defaultExportOptions: ExportOptions = {
-  format: 'png',
-  quality: 'high',
+  format: "png",
+  quality: "high",
   scale: 2,
   includeGrid: false,
   includeWatermark: false,
-  watermarkText: '',
+  watermarkText: "",
   padding: 20,
-  backgroundColor: '#ffffff',
+  backgroundColor: "#ffffff",
 };
 
 export const exportPresets: ExportPreset[] = [
   {
-    id: 'presentation',
-    name: 'Presentation',
-    description: 'High quality for slides',
+    id: "presentation",
+    name: "Presentation",
+    description: "High quality for slides",
     options: {
-      format: 'png',
-      quality: 'high',
+      format: "png",
+      quality: "high",
       scale: 2,
       includeGrid: false,
-      backgroundColor: '#ffffff',
+      backgroundColor: "#ffffff",
     },
   },
   {
-    id: 'print',
-    name: 'Print',
-    description: 'High resolution for printing',
+    id: "print",
+    name: "Print",
+    description: "High resolution for printing",
     options: {
-      format: 'pdf',
-      quality: 'high',
+      format: "pdf",
+      quality: "high",
       scale: 3,
       includeGrid: false,
       padding: 40,
     },
   },
   {
-    id: 'web',
-    name: 'Web',
-    description: 'Optimized for web',
+    id: "web",
+    name: "Web",
+    description: "Optimized for web",
     options: {
-      format: 'jpg',
-      quality: 'medium',
+      format: "jpg",
+      quality: "medium",
       scale: 1,
       includeGrid: false,
     },
   },
   {
-    id: 'technical',
-    name: 'Technical',
-    description: 'Include grid for documentation',
+    id: "technical",
+    name: "Technical",
+    description: "Include grid for documentation",
     options: {
-      format: 'svg',
-      quality: 'high',
+      format: "svg",
+      quality: "high",
       includeGrid: true,
       padding: 30,
     },

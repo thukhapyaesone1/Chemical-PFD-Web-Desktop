@@ -1,5 +1,6 @@
 // src/utils/loadComponents.ts
 import type { ComponentItem, Grip } from "@/components/Canvas/types";
+
 import { componentData } from "@/assets/Component_Datails";
 
 /**

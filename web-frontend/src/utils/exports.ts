@@ -1,6 +1,7 @@
-import Konva from 'konva';
-import jsPDF from 'jspdf';
-import { ExportOptions, CanvasItem } from '@/components/Canvas/types';
+import Konva from "konva";
+import jsPDF from "jspdf";
+
+import { ExportOptions, CanvasItem } from "@/components/Canvas/types";
 
 /* -------------------------------------------
    CONTENT BOUNDS
@@ -11,7 +12,7 @@ function getContentBounds(items: CanvasItem[]) {
   let maxX = -Infinity;
   let maxY = -Infinity;
 
-  items.forEach(item => {
+  items.forEach((item) => {
     minX = Math.min(minX, item.x);
     minY = Math.min(minY, item.y);
     maxX = Math.max(maxX, item.x + item.width);
@@ -32,21 +33,20 @@ function getContentBounds(items: CanvasItem[]) {
 export async function exportToImage(
   stage: Konva.Stage,
   options: ExportOptions,
-  items: CanvasItem[]
+  items: CanvasItem[],
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     try {
       if (!items.length) {
-        throw new Error('Nothing to export');
+        throw new Error("Nothing to export");
       }
-      
 
       const padding = options.padding ?? 40;
       const bounds = getContentBounds(items);
 
       const bgColor =
-        options.backgroundColor === 'transparent'
-          ? '#ffffff'
+        options.backgroundColor === "transparent"
+          ? "#ffffff"
           : options.backgroundColor;
 
       // Save stage state
@@ -79,17 +79,14 @@ export async function exportToImage(
         width: bounds.width + padding * 2,
         height: bounds.height + padding * 2,
         pixelRatio: options.scale,
-        mimeType:
-          options.format === 'jpg'
-            ? 'image/jpeg'
-            : 'image/png',
+        mimeType: options.format === "jpg" ? "image/jpeg" : "image/png",
         quality:
-          options.format === 'jpg'
-            ? options.quality === 'high'
+          options.format === "jpg"
+            ? options.quality === "high"
               ? 1
-              : options.quality === 'medium'
-              ? 0.8
-              : 0.6
+              : options.quality === "medium"
+                ? 0.8
+                : 0.6
             : undefined,
       });
 
@@ -99,7 +96,7 @@ export async function exportToImage(
       stage.position(originalPos);
 
       fetch(dataUrl)
-        .then(res => res.blob())
+        .then((res) => res.blob())
         .then(resolve)
         .catch(reject);
     } catch (err) {
@@ -111,7 +108,6 @@ export async function exportToImage(
 /* -------------------------------------------
    SVG EXPORT (SAFE)
 -------------------------------------------- */
- 
 
 /* -------------------------------------------
    PDF EXPORT
@@ -119,12 +115,12 @@ export async function exportToImage(
 export async function exportToPDF(
   stage: Konva.Stage,
   options: ExportOptions,
-  items: CanvasItem[]
+  items: CanvasItem[],
 ): Promise<Blob> {
   const imageBlob = await exportToImage(
     stage,
-    { ...options, format: 'png' },
-    items
+    { ...options, format: "png" },
+    items,
   );
 
   return new Promise((resolve, reject) => {
@@ -133,13 +129,14 @@ export async function exportToPDF(
 
     img.onload = () => {
       const pdf = new jsPDF({
-        orientation: img.width > img.height ? 'l' : 'p',
-        unit: 'px',
+        orientation: img.width > img.height ? "l" : "p",
+        unit: "px",
         format: [img.width, img.height],
       });
 
-      pdf.addImage(img, 'PNG', 0, 0, img.width, img.height);
-      const pdfBlob = pdf.output('blob');
+      pdf.addImage(img, "PNG", 0, 0, img.width, img.height);
+      const pdfBlob = pdf.output("blob");
+
       URL.revokeObjectURL(imageUrl);
       resolve(pdfBlob);
     };
@@ -154,7 +151,8 @@ export async function exportToPDF(
 -------------------------------------------- */
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
+
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
@@ -164,6 +162,7 @@ export function downloadBlob(blob: Blob, filename: string) {
 }
 
 export function downloadSVG(svgString: string, filename: string) {
-  const blob = new Blob([svgString], { type: 'image/svg+xml' });
+  const blob = new Blob([svgString], { type: "image/svg+xml" });
+
   downloadBlob(blob, filename);
 }
