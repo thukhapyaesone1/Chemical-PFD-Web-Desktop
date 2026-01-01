@@ -1,7 +1,8 @@
 import os
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QColor, QBrush, QKeySequence
-from PyQt5.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QMdiArea, QShortcut, QMdiSubWindow
+from PyQt5.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QShortcut, QMdiSubWindow
+from PyQt5.QtCore import Qt
 
 from src.canvas.widget import CanvasWidget
 from src.component_library import ComponentLibrary
