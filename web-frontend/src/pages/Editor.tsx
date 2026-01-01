@@ -20,11 +20,8 @@ import {
 } from "react-icons/tb";
 import { MdZoomIn, MdZoomOut, MdCenterFocusWeak } from "react-icons/md";
 import { FiDownload } from "react-icons/fi";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@heroui/react";
+import { Popover, PopoverTrigger, PopoverContent } from "@heroui/react";
+import { TbGridDots, TbGridPattern } from "react-icons/tb";
 
 import { ThemeSwitch } from "@/components/theme-switch";
 import { CanvasItemImage } from "@/components/Canvas/CanvasItemImage";
@@ -38,16 +35,13 @@ import { useComponents } from "@/context/ComponentContext";
 import ExportModal from "@/components/Canvas/ExportModal";
 import { useExport } from "@/hooks/useExport";
 import { ExportOptions } from "@/components/Canvas/types";
-import {
-  useEditorStore,
-} from "@/store/useEditorStore";
+import { useEditorStore } from "@/store/useEditorStore";
 import {
   type ComponentItem,
   type CanvasItem,
   type Connection,
 } from "@/components/Canvas/types";
 import { ExportReportModal } from "@/components/Canvas/ExportReportModal";
-import { TbGridDots, TbGridPattern } from "react-icons/tb";
 
 type Shortcut = {
   key: string;
@@ -63,34 +57,36 @@ export default function Editor() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(true);
-  const [gridSize, setGridSize] = useState(20);
+  const [gridSize] = useState(20);
 
   // Get editor store methods
   const editorStore = useEditorStore();
-  
+
   // Get current state from store
   const currentState = useMemo(() => {
     if (!projectId) return null;
+
     return editorStore.getEditorState(projectId);
   }, [projectId, editorStore]);
-  
+
   // Initialize editor when projectId changes
   useEffect(() => {
     if (projectId) {
       editorStore.initEditor(projectId);
     }
   }, [projectId, editorStore]);
-  
+
   // Extract data from current state
   const droppedItems = useMemo(() => {
     if (!projectId) return [];
+
     return editorStore.getItemsInOrder(projectId);
   }, [projectId, editorStore, currentState?.items]);
-  
+
   const connections = useMemo(() => {
     return currentState?.connections || [];
   }, [currentState?.connections]);
-  
+
   const canUndo = projectId ? editorStore.canUndo(projectId) : false;
   const canRedo = projectId ? editorStore.canRedo(projectId) : false;
 
@@ -122,13 +118,14 @@ export default function Editor() {
   };
 
   const handleToggleGrid = () => {
-    setShowGrid(prev => !prev);
+    setShowGrid((prev) => !prev);
   };
 
   const handleCenterToContent = () => {
     if (droppedItems.length === 0) {
       setStagePos({ x: 0, y: 0 });
       setStageScale(1);
+
       return;
     }
 
@@ -168,8 +165,12 @@ export default function Editor() {
   };
 
   // Selection state
-  const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
-  const [selectedConnectionIds, setSelectedConnectionIds] = useState<Set<number>>(new Set());
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(
+    new Set(),
+  );
+  const [selectedConnectionIds, setSelectedConnectionIds] = useState<
+    Set<number>
+  >(new Set());
   const [searchQuery, setSearchQuery] = useState("");
 
   // Connection drawing state
@@ -202,7 +203,7 @@ export default function Editor() {
   // --- Helpers ---
   const connectionPaths = useMemo(
     () => calculateManualPathsWithBridges(connections, droppedItems),
-    [connections, droppedItems]
+    [connections, droppedItems],
   );
 
   const handleCancelDrawing = () => {
@@ -215,6 +216,7 @@ export default function Editor() {
   const snapToGridPosition = (x: number, y: number) => {
     if (!snapToGrid) return { x, y };
     const effectiveGridSize = gridSize;
+
     return {
       x: Math.round(x / effectiveGridSize) * effectiveGridSize,
       y: Math.round(y / effectiveGridSize) * effectiveGridSize,
@@ -222,69 +224,84 @@ export default function Editor() {
   };
 
   // --- Shortcuts ---
-  const shortcuts: Shortcut[] = useMemo(() => [
-    {
-      key: "z",
-      label: "Undo",
-      display: "Ctrl + Z",
-      requireCtrl: true,
-      handler: () => projectId && editorStore.undo(projectId),
-    },
-    {
-      key: "g",
-      label: "Toggle Grid",
-      display: "Ctrl+G",
-      requireCtrl: true,
-      handler: handleToggleGrid,
-    },
-    {
-      key: "h",
-      label: "Toggle Snap to Grid",
-      display: "Ctrl+h",
-      requireCtrl: true,
-      handler: () => setSnapToGrid(prev => !prev),
-    },
-    {
-      key: "y",
-      label: "Redo",
-      display: "Ctrl + Y",
-      requireCtrl: true,
-      handler: () => projectId && editorStore.redo(projectId),
-    },
-    {
-      key: "c",
-      label: "Center to Content",
-      display: "Ctrl + C",
-      requireCtrl: true,
-      handler: handleCenterToContent,
-    },
-    {
-      key: "d",
-      label: "Delete Selection",
-      display: "d",
-      requireCtrl: false,
-      handler: () => {
-        if (!projectId) return;
-
-        if (selectedConnectionIds.size > 0) {
-          editorStore.batchRemoveConnections(projectId, Array.from(selectedConnectionIds));
-          setSelectedConnectionIds(new Set());
-        }
-
-        if (selectedItemIds.size > 0) {
-          editorStore.batchDeleteItems(projectId, Array.from(selectedItemIds));
-          setSelectedItemIds(new Set());
-        }
+  const shortcuts: Shortcut[] = useMemo(
+    () => [
+      {
+        key: "z",
+        label: "Undo",
+        display: "Ctrl + Z",
+        requireCtrl: true,
+        handler: () => projectId && editorStore.undo(projectId),
       },
-    },
-    {
-      key: "escape",
-      label: "Cancel Drawing",
-      display: "Esc",
-      requireCtrl: false,
-      handler: handleCancelDrawing,
-    },
-  ], [projectId, editorStore, selectedItemIds, selectedConnectionIds, snapToGrid]);
+      {
+        key: "g",
+        label: "Toggle Grid",
+        display: "Ctrl+G",
+        requireCtrl: true,
+        handler: handleToggleGrid,
+      },
+      {
+        key: "h",
+        label: "Toggle Snap to Grid",
+        display: "Ctrl+h",
+        requireCtrl: true,
+        handler: () => setSnapToGrid((prev) => !prev),
+      },
+      {
+        key: "y",
+        label: "Redo",
+        display: "Ctrl + Y",
+        requireCtrl: true,
+        handler: () => projectId && editorStore.redo(projectId),
+      },
+      {
+        key: "c",
+        label: "Center to Content",
+        display: "Ctrl + C",
+        requireCtrl: true,
+        handler: handleCenterToContent,
+      },
+      {
+        key: "d",
+        label: "Delete Selection",
+        display: "d",
+        requireCtrl: false,
+        handler: () => {
+          if (!projectId) return;
+
+          if (selectedConnectionIds.size > 0) {
+            editorStore.batchRemoveConnections(
+              projectId,
+              Array.from(selectedConnectionIds),
+            );
+            setSelectedConnectionIds(new Set());
+          }
+
+          if (selectedItemIds.size > 0) {
+            editorStore.batchDeleteItems(
+              projectId,
+              Array.from(selectedItemIds),
+            );
+            setSelectedItemIds(new Set());
+          }
+        },
+      },
+      {
+        key: "escape",
+        label: "Cancel Drawing",
+        display: "Esc",
+        requireCtrl: false,
+        handler: handleCancelDrawing,
+      },
+    ],
+    [
+      projectId,
+      editorStore,
+      selectedItemIds,
+      selectedConnectionIds,
+      snapToGrid,
+    ],
+  );
 
   // Handle keyboard events
   useEffect(() => {
@@ -297,18 +314,17 @@ export default function Editor() {
           (shortcut.key === "delete" &&
             (key === "delete" || key === "backspace"));
 
-        if (
-          matchesKey &&
-          (!shortcut.requireCtrl || isCtrlOrCmd(e))
-        ) {
+        if (matchesKey && (!shortcut.requireCtrl || isCtrlOrCmd(e))) {
           e.preventDefault();
           shortcut.handler();
+
           return;
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [shortcuts]);
 
@@ -318,8 +334,10 @@ export default function Editor() {
 
     if (item.svg) {
       const img = new Image();
+
       img.src = item.svg;
       const canvas = document.createElement("canvas");
+
       canvas.width = 80;
       canvas.height = 80;
       const ctx = canvas.getContext("2d");
@@ -355,6 +373,7 @@ export default function Editor() {
       if (pointer) {
         const droppedItem = dragItemRef.current;
         const img = new Image();
+
         img.src = droppedItem.svg || droppedItem.icon || "";
 
         const finalizeAdd = (width: number, height: number) => {
@@ -363,6 +382,7 @@ export default function Editor() {
 
           if (snapToGrid) {
             const snapped = snapToGridPosition(x, y);
+
             x = snapped.x;
             y = snapped.y;
           }
@@ -443,7 +463,9 @@ export default function Editor() {
     editorStore.deleteItem(projectId, itemId);
     setSelectedItemIds((prev: Set<number>) => {
       const next = new Set(prev);
+
       next.delete(itemId);
+
       return next;
     });
   };
@@ -454,7 +476,8 @@ export default function Editor() {
     let snappedUpdates: Partial<CanvasItem> = { ...updates };
 
     if (snapToGrid && (updates.x !== undefined || updates.y !== undefined)) {
-      const currentItem = droppedItems.find(i => i.id === itemId);
+      const currentItem = droppedItems.find((i) => i.id === itemId);
+
       if (currentItem) {
         const x = updates.x ?? currentItem.x;
         const y = updates.y ?? currentItem.y;
@@ -470,15 +493,16 @@ export default function Editor() {
       selectedItemIds.has(itemId) &&
       (snappedUpdates.x !== undefined || snappedUpdates.y !== undefined)
     ) {
-      const currentItem = droppedItems.find(i => i.id === itemId);
+      const currentItem = droppedItems.find((i) => i.id === itemId);
+
       if (currentItem) {
         const deltaX = (snappedUpdates.x ?? currentItem.x) - currentItem.x;
         const deltaY = (snappedUpdates.y ?? currentItem.y) - currentItem.y;
 
         if (deltaX !== 0 || deltaY !== 0) {
           const batchUpdates = droppedItems
-            .filter(item => selectedItemIds.has(item.id))
-            .map(item => ({
+            .filter((item) => selectedItemIds.has(item.id))
+            .map((item) => ({
               id: item.id,
               patch: {
                 x: snapToGrid
@@ -491,6 +515,7 @@ export default function Editor() {
             }));
 
           editorStore.batchUpdateItems(projectId, batchUpdates);
+
           return;
         }
       }
@@ -500,16 +525,21 @@ export default function Editor() {
     editorStore.updateItem(projectId, itemId, snappedUpdates);
   };
 
-  const handleSelectItem = (itemId: number, e?: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleSelectItem = (
+    itemId: number,
+    e?: Konva.KonvaEventObject<MouseEvent>,
+  ) => {
     const isCtrl = e?.evt.ctrlKey || e?.evt.metaKey;
 
-    setSelectedItemIds(prev => {
+    setSelectedItemIds((prev) => {
       const next = new Set(isCtrl ? prev : []);
+
       if (isCtrl && prev.has(itemId)) {
         next.delete(itemId);
       } else {
         next.add(itemId);
       }
+
       return next;
     });
 
@@ -528,7 +558,7 @@ export default function Editor() {
     itemId: number,
     gripIndex: number,
     x: number,
-    y: number
+    y: number,
   ) => {
     if (!projectId) return;
 
@@ -549,6 +579,7 @@ export default function Editor() {
       setIsDrawingConnection(false);
       setTempConnection(null);
       setSelectedConnectionIds(new Set([newConnection.id]));
+
       return;
     }
 
@@ -575,8 +606,10 @@ export default function Editor() {
   const handleStageMouseMove = () => {
     if (isDrawingConnection && tempConnection) {
       const stage = stageRef.current;
+
       if (stage) {
         const pointer = stage.getRelativePointerPosition();
+
         if (pointer) {
           setTempConnection((prev: any) =>
             prev
@@ -585,7 +618,7 @@ export default function Editor() {
                 currentX: pointer.x,
                 currentY: pointer.y,
               }
-              : null
+              : null,
           );
         }
       }
@@ -602,6 +635,7 @@ export default function Editor() {
 
     const resizeObserver = new ResizeObserver((entries) => {
       const rect = entries[0].contentRect;
+
       setStageSize({
         width: rect.width,
         height: rect.height,
@@ -609,6 +643,7 @@ export default function Editor() {
     });
 
     resizeObserver.observe(containerRef.current);
+
     return () => resizeObserver.disconnect();
   }, []);
 
@@ -626,52 +661,57 @@ export default function Editor() {
   };
 
   // Grid Layer Component
-  const GridLayer = React.memo(({
-    width,
-    height,
-    gridSize,
-    showGrid,
-  }: {
-    width: number;
-    height: number;
-    gridSize: number;
-    showGrid: boolean;
-  }) => {
-    if (!showGrid) return null;
+  const GridLayer = React.memo(
+    ({
+      width,
+      height,
+      gridSize,
+      showGrid,
+    }: {
+      width: number;
+      height: number;
+      gridSize: number;
+      showGrid: boolean;
+    }) => {
+      if (!showGrid) return null;
 
-    return (
-      <Layer listening={false}>
-        <Shape
-          stroke="#9ca3af"
-          strokeWidth={1}
-          opacity={0.3}
-          perfectDrawEnabled={false}
-          sceneFunc={(context: CanvasRenderingContext2D, shape: Konva.Shape) => {
-            context.beginPath();
+      return (
+        <Layer listening={false}>
+          <Shape
+            opacity={0.3}
+            perfectDrawEnabled={false}
+            sceneFunc={(
+              context: any,
+              shape: Konva.Shape,
+            ) => {
+              context.beginPath();
 
-            const startX = -5000;
-            const endX = width + 5000;
-            const startY = -5000;
-            const endY = height + 5000;
+              const startX = -5000;
+              const endX = width + 5000;
+              const startY = -5000;
+              const endY = height + 5000;
 
-            // Vertical Lines
-            for (let x = startX; x <= endX; x += gridSize) {
-              context.moveTo(x, startY);
-              context.lineTo(x, endY);
-            }
+              // Vertical Lines
+              for (let x = startX; x <= endX; x += gridSize) {
+                context.moveTo(x, startY);
+                context.lineTo(x, endY);
+              }
 
-            // Horizontal Lines
-            for (let y = startY; y <= endY; y += gridSize) {
-              context.moveTo(startX, y);
-              context.lineTo(endX, y);
-            }
+              // Horizontal Lines
+              for (let y = startY; y <= endY; y += gridSize) {
+                context.moveTo(startX, y);
+                context.lineTo(endX, y);
+              }
 
-            context.fillStrokeShape(shape);
-          }}
-        />
-      </Layer>
-    );
-  });
+              context.fillStrokeShape(shape);
+            }}
+            stroke="#9ca3af"
+            strokeWidth={1}
+          />
+        </Layer>
+      );
+    },
+  );
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
@@ -720,7 +760,7 @@ export default function Editor() {
               aria-label="Edit Actions"
               disabledKeys={
                 [!canUndo && "undo", !canRedo && "redo"].filter(
-                  Boolean
+                  Boolean,
                 ) as string[]
               }
             >
@@ -733,9 +773,20 @@ export default function Editor() {
               <DropdownItem
                 key="delete"
                 onPress={() => {
-                  if (selectedItemIds.size > 0 || selectedConnectionIds.size > 0) {
-                    if (projectId && selectedItemIds.size > 0) editorStore.batchDeleteItems(projectId, Array.from(selectedItemIds));
-                    if (projectId && selectedConnectionIds.size > 0) editorStore.batchRemoveConnections(projectId, Array.from(selectedConnectionIds));
+                  if (
+                    selectedItemIds.size > 0 ||
+                    selectedConnectionIds.size > 0
+                  ) {
+                    if (projectId && selectedItemIds.size > 0)
+                      editorStore.batchDeleteItems(
+                        projectId,
+                        Array.from(selectedItemIds),
+                      );
+                    if (projectId && selectedConnectionIds.size > 0)
+                      editorStore.batchRemoveConnections(
+                        projectId,
+                        Array.from(selectedConnectionIds),
+                      );
                     setSelectedItemIds(new Set());
                     setSelectedConnectionIds(new Set());
                   }
@@ -760,9 +811,15 @@ export default function Editor() {
               </Button>
             </DropdownTrigger>
             <DropdownMenu aria-label="View Actions">
-              <DropdownItem key="zoom-in" onPress={handleZoomIn}>Zoom In (+)</DropdownItem>
-              <DropdownItem key="zoom-out" onPress={handleZoomOut}>Zoom Out (-)</DropdownItem>
-              <DropdownItem key="fit" onPress={handleCenterToContent}>Fit to Screen</DropdownItem>
+              <DropdownItem key="zoom-in" onPress={handleZoomIn}>
+                Zoom In (+)
+              </DropdownItem>
+              <DropdownItem key="zoom-out" onPress={handleZoomOut}>
+                Zoom Out (-)
+              </DropdownItem>
+              <DropdownItem key="fit" onPress={handleCenterToContent}>
+                Fit to Screen
+              </DropdownItem>
               <DropdownItem key="grid" onPress={handleToggleGrid}>
                 {showGrid ? "Hide Grid" : "Show Grid"}
               </DropdownItem>
@@ -872,8 +929,10 @@ export default function Editor() {
 
               if (clickedOnEmpty && isDrawingConnection && tempConnection) {
                 const stage = stageRef.current;
+
                 if (stage) {
                   const pointer = stage.getRelativePointerPosition();
+
                   if (pointer) {
                     setTempConnection((prev: any) =>
                       prev
@@ -884,10 +943,11 @@ export default function Editor() {
                             { x: pointer.x, y: pointer.y },
                           ],
                         }
-                        : prev
+                        : prev,
                     );
                   }
                 }
+
                 return;
               }
 
@@ -897,8 +957,10 @@ export default function Editor() {
             }}
             onMouseMove={() => {
               const stage = stageRef.current;
+
               if (stage) {
                 const pointer = stage.getRelativePointerPosition();
+
                 if (pointer)
                   setCursorPos({
                     x: Math.round(pointer.x),
@@ -911,32 +973,35 @@ export default function Editor() {
             onWheel={handleWheel}
           >
             <GridLayer
-              width={stageSize.width}
-              height={stageSize.height}
               gridSize={gridSize}
+              height={stageSize.height}
               showGrid={showGrid}
+              width={stageSize.width}
             />
             <Layer>
               {/* Render Connections */}
               {connections.map((connection: Connection) => (
                 <ConnectionLine
                   key={connection.id}
+                  arrowAngle={connectionPaths[connection.id]?.arrowAngle}
                   connection={connection}
                   isSelected={selectedConnectionIds.has(connection.id)}
                   items={droppedItems}
                   pathData={connectionPaths[connection.id]?.pathData}
-                  arrowAngle={connectionPaths[connection.id]?.arrowAngle}
-                  targetPosition={connectionPaths[connection.id]?.endPoint}
                   points={[]}
+                  targetPosition={connectionPaths[connection.id]?.endPoint}
                   onSelect={(e: Konva.KonvaEventObject<MouseEvent>) => {
                     const isCtrl = e?.evt.ctrlKey || e?.evt.metaKey;
+
                     setSelectedConnectionIds((prev: Set<number>) => {
                       const next = new Set(isCtrl ? prev : []);
+
                       if (isCtrl && prev.has(connection.id)) {
                         next.delete(connection.id);
                       } else {
                         next.add(connection.id);
                       }
+
                       return next;
                     });
                     if (!isCtrl) setSelectedItemIds(new Set());
@@ -984,7 +1049,6 @@ export default function Editor() {
           {/* Floating Info Bubble */}
           <div className="absolute bottom-6 right-[38%] flex flex-col items-end gap-2 pointer-events-none">
             <div className="flex items-center gap-3 px-4 py-2 bg-white/90 dark:bg-[#1f2938] backdrop-blur shadow-lg border border-gray-200 rounded-full text-xs font-mono text-gray-600 pointer-events-auto">
-
               {/* XY Coordinates */}
               <div className="flex gap-2 dark:text-gray-200">
                 <span className="font-bold text-gray-400">X</span> {cursorPos.x}
@@ -998,35 +1062,47 @@ export default function Editor() {
 
               <div className="flex items-center gap-3">
                 {/* Show Grid Button */}
-                <Tooltip content={showGrid ? "Hide Grid" : "Show Grid"} placement="top">
+                <Tooltip
+                  content={showGrid ? "Hide Grid" : "Show Grid"}
+                  placement="top"
+                >
                   <button
+                    aria-label="Toggle Grid Visibility"
                     className={`w-8 h-8 flex items-center justify-center rounded-md 
         border border-gray-300 dark:border-gray-700 
         bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 
         transition-all duration-150`}
                     onClick={() => setShowGrid((prev) => !prev)}
-                    aria-label="Toggle Grid Visibility"
                   >
-                    {showGrid ? <TbGridDots className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-                      : <TbGridPattern className="w-4 h-4 text-gray-600 dark:text-gray-300" />}
+                    {showGrid ? (
+                      <TbGridDots className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                    ) : (
+                      <TbGridPattern className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                    )}
                   </button>
                 </Tooltip>
 
                 {/* Snap to Grid Switch */}
-                <Tooltip content={snapToGrid ? "Snap Enabled" : "Snap Disabled"} placement="top">
+                <Tooltip
+                  content={snapToGrid ? "Snap Enabled" : "Snap Disabled"}
+                  placement="top"
+                >
                   <Switch
-                    size="sm"
+                    aria-label="Snap to Grid"
                     color="primary"
                     isSelected={snapToGrid}
-                    onValueChange={setSnapToGrid}
-                    aria-label="Snap to Grid"
+                    size="sm"
                     thumbIcon={({ isSelected, className }) =>
-                      isSelected ? <TbGridDots className={className} /> : <TbGridPattern className={className} />
+                      isSelected ? (
+                        <TbGridDots className={className} />
+                      ) : (
+                        <TbGridPattern className={className} />
+                      )
                     }
+                    onValueChange={setSnapToGrid}
                   />
                 </Tooltip>
               </div>
-
 
               <div className="w-px h-3 bg-gray-300" />
 
@@ -1093,17 +1169,13 @@ export default function Editor() {
           </div>
           {/* Canvas Shortcuts Help */}
           <div className="absolute bottom-6 right-6 z-20">
-            <Popover
-              placement="top-end"
-              offset={8}
-              showArrow
-            >
+            <Popover showArrow offset={8} placement="top-end">
               <PopoverTrigger>
                 <Button
                   isIconOnly
+                  className="rounded-ful bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                   size="sm"
                   variant="bordered"
-                  className="rounded-ful bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   ?
                 </Button>
@@ -1121,9 +1193,7 @@ export default function Editor() {
                         key={s.label}
                         className="flex justify-between items-center text-xs"
                       >
-                        <span className="text-foreground/70">
-                          {s.label}
-                        </span>
+                        <span className="text-foreground/70">{s.label}</span>
                         <span className="font-mono bg-content2 px-2 py-0.5 rounded">
                           {s.display}
                         </span>
@@ -1139,7 +1209,6 @@ export default function Editor() {
             </Popover>
           </div>
 
-
           {/* Connection Guidance Overlay */}
           {isDrawingConnection && (
             <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none">
@@ -1150,7 +1219,8 @@ export default function Editor() {
                 </span>
                 <div className="w-px h-3 bg-white/20" />
                 <span className="text-white/80 text-xs">
-                  Click empty space to add corner • Click target point to finish • Press Esc to cancel
+                  Click empty space to add corner • Click target point to finish
+                  • Press Esc to cancel
                 </span>
               </div>
             </div>
@@ -1186,7 +1256,6 @@ export default function Editor() {
           )}
         </div>
         {/* Right Sidebar - Canvas Properties/Items List */}
-
         <div className="relative overflow-hidden border-l border-gray-200 dark:border-gray-800 hidden lg:block">
           {/* Collapse Button */}
           <button
@@ -1207,7 +1276,11 @@ export default function Editor() {
             <CanvasPropertiesSidebar
               showAllItemsByDefault
               items={droppedItems}
-              selectedItemId={selectedItemIds.size === 1 ? Array.from(selectedItemIds)[0] : undefined}
+              selectedItemId={
+                selectedItemIds.size === 1
+                  ? Array.from(selectedItemIds)[0]
+                  : null
+              }
               onDeleteItem={handleDeleteItem}
               onSelectItem={(id: number) => setSelectedItemIds(new Set([id]))}
               onUpdateItem={handleUpdateItem}
@@ -1220,7 +1293,6 @@ export default function Editor() {
           onClose={() => setShowExportModal(false)}
           onExport={handleExport}
         />
-
 
         <ExportReportModal
           editorId={projectId ?? ""}

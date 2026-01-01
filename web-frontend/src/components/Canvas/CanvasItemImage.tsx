@@ -5,7 +5,6 @@ import {
   Circle,
   Group,
   Text,
-  Rect,
 } from "react-konva";
 import useImage from "use-image";
 import Konva from "konva";
@@ -99,8 +98,8 @@ export const CanvasItemImage = ({
           width={item.width}
           x={0}
           y={0}
-          onClick={onSelect}
-          onTap={onSelect}
+          onClick={(e) => onSelect(e as any)}
+          onTap={(e) => onSelect(e as any)}
         />
       </Group>
 

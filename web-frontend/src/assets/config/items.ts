@@ -1,4 +1,6 @@
 // Import all PNG toolbar icons
+import gripsData from "./grips.json";
+
 import CentrifugalCompressorIcon from "@/assets/toolbar/Compressors/Centrifugal Compressor.png";
 import EjectorCompressorIcon from "@/assets/toolbar/Compressors/Ejector Compressor.png";
 import FanIcon from "@/assets/toolbar/Compressors/Fan.png";
@@ -19,7 +21,6 @@ import OilGasOrPulverizedFuelFurnaceIcon from "@/assets/toolbar/Furnaces and Boi
 import SolidFuelFurnaceIcon from "@/assets/toolbar/Furnaces and Boilers/Solid Fuel Furnace.png";
 import OneCellFiredHeaterFurnaceIcon from "@/assets/toolbar/Furnaces and Boilers/One Cell Fired Heater, Furnace.png";
 import TwoCellFiredHeaterFurnaceIcon from "@/assets/toolbar/Furnaces and Boilers/Two Cell Fired Heater, Furnace.png";
-
 import OilGasOrPulverizedFuelFurnaceSVG from "@/assets/svg/Furnaces and Boilers/Oil Gas or Pulverized Fuel Furnace.svg";
 import SolidFuelFurnaceSVG from "@/assets/svg/Furnaces and Boilers/Solid Fuel Furnace.svg";
 import OneCellFiredHeaterFurnaceSVG from "@/assets/svg/Furnaces and Boilers/One Cell Fired Heater, Furnace.svg";
@@ -32,7 +33,6 @@ import ExchangerIcon from "@/assets/toolbar/Heating or Cooling Arrangements/Exch
 import HeatExchangerIcon from "@/assets/toolbar/Heating or Cooling Arrangements/Heat Exchanger.png";
 import ImmersionCoilIcon from "@/assets/toolbar/Heating or Cooling Arrangements/Immersion Coil.png";
 import KettleReboilerIcon from "@/assets/toolbar/Heating or Cooling Arrangements/Kettle Reboiler.png";
-
 import Exchanger905SVG from "@/assets/svg/Heating or Cooling Arrangements/905Exchanger.svg";
 import KettleReboiler907SVG from "@/assets/svg/Heating or Cooling Arrangements/907Kettle Reboiler.svg";
 import ExchangerSVG from "@/assets/svg/Heating or Cooling Arrangements/Exchanger.svg";
@@ -43,14 +43,12 @@ import KettleReboilerSVG from "@/assets/svg/Heating or Cooling Arrangements/Kett
 // Piping
 import InflowLineIcon from "@/assets/toolbar/Piping/Inflow Line.png";
 import OutflowLineIcon from "@/assets/toolbar/Piping/Outflow Line.png";
-
 import InflowLineSVG from "@/assets/svg/Piping/Inflow Line.svg";
 import OutflowLineSVG from "@/assets/svg/Piping/Outflow Line.svg";
 
 // Fittings
 import ReducerExpanderIcon from "@/assets/toolbar/Fittings/Reducer, Expander.png";
 import FilterIcon from "@/assets/toolbar/Fittings/Filter.png";
-
 import ReducerExpanderSVG from "@/assets/svg/Fittings/Reducer, Expander.svg";
 import FilterSVG from "@/assets/svg/Fittings/Filter.svg";
 
@@ -59,7 +57,6 @@ import HorizontalVesselIcon from "@/assets/toolbar/Process Vessels/Horizontal Ve
 import PackedVesselIcon from "@/assets/toolbar/Process Vessels/Packed Vessel.png";
 import TraysOrPlatesIcon from "@/assets/toolbar/Process Vessels/Trays or plates.png";
 import VerticalVesselIcon from "@/assets/toolbar/Process Vessels/Vertical Vessel.png";
-
 import HorizontalVesselSVG from "@/assets/svg/Process Vessels/Horizontal Vessel.svg";
 import PackedVesselSVG from "@/assets/svg/Process Vessels/Packed Vessel.svg";
 import TraysOrPlatesSVG from "@/assets/svg/Process Vessels/Trays or plates.svg";
@@ -74,7 +71,6 @@ import PlungerPumpIcon from "@/assets/toolbar/Pumps/Plunger Pump.png";
 import ProportioningPumpIcon from "@/assets/toolbar/Pumps/Proportioning Pump.png";
 import ReciprocatingPumpIcon from "@/assets/toolbar/Pumps/Reciprocating Pump.png";
 import CentrifugalPumpIcon from "@/assets/toolbar/Pumps/Centrifugal Pump.png";
-
 import BlowingEggSVG from "@/assets/svg/Pumps/Blowing Egg.svg";
 import DuplexPumpSVG from "@/assets/svg/Pumps/Duplex Pump.svg";
 import EjectorVaporServiceSVG from "@/assets/svg/Pumps/Ejector(Vapor Service).svg";
@@ -91,7 +87,6 @@ import SeparatorsForLiquidsDecanterSVG from "@/assets/svg/Separators/Separators 
 // Storage Vessels Tanks
 import FixedRoofTankIcon from "@/assets/toolbar/Storage Vessels Tanks/Fixed Roof Tank.png";
 import FloatingRoofTankIcon from "@/assets/toolbar/Storage Vessels Tanks/Floating Roof Tank.png";
-
 import FixedRoofTankSVG from "@/assets/svg/Storage Vessels Tanks/Fixed Roof Tank.svg";
 import FloatingRoofTankSVG from "@/assets/svg/Storage Vessels Tanks/Floating Roof Tank.svg";
 
@@ -100,7 +95,6 @@ import GateValveIcon from "@/assets/toolbar/Valves/Gate Valve.png";
 import ButterflyValveIcon from "@/assets/toolbar/Valves/Butterfly Valve.png";
 import FloatValveIcon from "@/assets/toolbar/Valves/Float Valve.png";
 import GlobeValveIcon from "@/assets/toolbar/Valves/Globe Valve.png";
-
 import GateValveSVG from "@/assets/svg/Valves/Gate Valve.svg";
 import ButterflyValveSVG from "@/assets/svg/Valves/Butterfly Valve.svg";
 import FloatValveSVG from "@/assets/svg/Valves/Float Valve.svg";
@@ -113,7 +107,6 @@ import ContinuousDryerSVG from "@/assets/svg/Dryers/Continuous Dryer.svg";
 // Size Reduction Equipments
 import JawCrusherIcon from "@/assets/toolbar/Size Reduction Equipements/Jaw Crusher.png";
 import RollerCrusherIcon from "@/assets/toolbar/Size Reduction Equipements/Roller Crusher.png";
-
 import JawCrusherSVG from "@/assets/svg/Size Reduction Equipements/Jaw Crusher.svg";
 import RollerCrusherSVG from "@/assets/svg/Size Reduction Equipements/Roller Crusher.svg";
 
@@ -122,7 +115,6 @@ import GeneralSymbolIcon from "@/assets/toolbar/Feeders/General Symbol.png";
 import GeneralSymbolSVG from "@/assets/svg/Feeders/General Symbol.svg";
 
 // Import grips data
-import gripsData from "./grips.json";
 import { ComponentItem } from "@/components/Canvas/types";
 
 export interface componentConfigEntry {
@@ -138,11 +130,12 @@ export interface componentConfigEntry {
 // Helper function to get grips for a component
 const getGripsForComponent = (componentName: string, category: string) => {
   const gripEntry = gripsData.find(
-    (entry) => entry.component === componentName && entry.category === category
+    (entry) => entry.component === componentName && entry.category === category,
   );
-  return (gripEntry?.grips || []).map(g => ({
+
+  return (gripEntry?.grips || []).map((g) => ({
     ...g,
-    side: g.side as "top" | "bottom" | "left" | "right"
+    side: g.side as "top" | "bottom" | "left" | "right",
   }));
 };
 
@@ -157,7 +150,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "PRV",
       suffix: "",
-      grips: getGripsForComponent("Centrifugal Compressor", "Compressors")
+      grips: getGripsForComponent("Centrifugal Compressor", "Compressors"),
     },
 
     "Ejector Compressor": {
@@ -169,9 +162,9 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "PRV",
       suffix: "A/B",
-      grips: getGripsForComponent("Ejector Compressor", "Compressors")
+      grips: getGripsForComponent("Ejector Compressor", "Compressors"),
     },
-    "Fan": {
+    Fan: {
       name: "Fan",
       icon: FanIcon,
       svg: FanSVG,
@@ -180,7 +173,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "E",
       suffix: "A/B",
-      grips: getGripsForComponent("Fan", "Compressors")
+      grips: getGripsForComponent("Fan", "Compressors"),
     },
     "Positive Displacement Compressor": {
       name: "Positive Displacement Compressor",
@@ -191,7 +184,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "",
-      grips: getGripsForComponent("Positive Displacement Compressor", "Compressors")
+      grips: getGripsForComponent(
+        "Positive Displacement Compressor",
+        "Compressors",
+      ),
     },
     "Reciprocating Compressor": {
       name: "Reciprocating Compressor",
@@ -202,9 +198,9 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "E",
       suffix: "A",
-      grips: getGripsForComponent("Reciprocating Compressor", "Compressors")
+      grips: getGripsForComponent("Reciprocating Compressor", "Compressors"),
     },
-    "Turbine": {
+    Turbine: {
       name: "Turbine",
       icon: TurbineIcon,
       svg: TurbineSVG,
@@ -213,8 +209,8 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "A",
-      grips: getGripsForComponent("Turbine", "Compressors")
-    }
+      grips: getGripsForComponent("Turbine", "Compressors"),
+    },
   },
   "Furnaces and Boilers": {
     "Oil Gas or Pulverized Fuel Furnace": {
@@ -226,7 +222,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "B",
-      grips: getGripsForComponent("Oil Gas or Pulverized Fuel Furnace", "Furnaces and Boilers")
+      grips: getGripsForComponent(
+        "Oil Gas or Pulverized Fuel Furnace",
+        "Furnaces and Boilers",
+      ),
     },
     "Solid Fuel Furnace": {
       name: "Solid Fuel Furnace",
@@ -237,7 +236,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "C",
       suffix: "A",
-      grips: getGripsForComponent("Solid Fuel Furnace", "Furnaces and Boilers")
+      grips: getGripsForComponent("Solid Fuel Furnace", "Furnaces and Boilers"),
     },
     "One Cell Fired Heater, Furnace": {
       name: "One Cell Fired Heater, Furnace",
@@ -248,7 +247,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "A/B",
-      grips: getGripsForComponent("One Cell Fired Heater", "Furnaces and Boilers")
+      grips: getGripsForComponent(
+        "One Cell Fired Heater",
+        "Furnaces and Boilers",
+      ),
     },
     "Two Cell Fired Heater, Furnace": {
       name: "Two Cell Fired Heater, Furnace",
@@ -259,8 +261,11 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "A",
-      grips: getGripsForComponent("Two Cell Fired Heater", "Furnaces and Boilers")
-    }
+      grips: getGripsForComponent(
+        "Two Cell Fired Heater",
+        "Furnaces and Boilers",
+      ),
+    },
   },
   "Heating or Cooling Arrangements": {
     "905Exchanger": {
@@ -272,7 +277,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "PRV",
       suffix: "",
-      grips: getGripsForComponent("905 Exchanger", "Heating or Cooling Arrangements")
+      grips: getGripsForComponent(
+        "905 Exchanger",
+        "Heating or Cooling Arrangements",
+      ),
     },
     "907Kettle Reboiler": {
       name: "Kettle Reboiler",
@@ -283,9 +291,12 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "",
-      grips: getGripsForComponent("907 Kettle Reboiler", "Heating or Cooling Arrangements")
+      grips: getGripsForComponent(
+        "907 Kettle Reboiler",
+        "Heating or Cooling Arrangements",
+      ),
     },
-    "Exchanger": {
+    Exchanger: {
       name: "Exchanger",
       icon: ExchangerIcon,
       svg: ExchangerSVG,
@@ -294,7 +305,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "PRV",
       suffix: "B",
-      grips: getGripsForComponent("Exchanger", "Heating or Cooling Arrangements")
+      grips: getGripsForComponent(
+        "Exchanger",
+        "Heating or Cooling Arrangements",
+      ),
     },
     "Heat Exchanger": {
       name: "Heat Exchanger",
@@ -305,7 +319,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "B",
-      grips: getGripsForComponent("Heat Exchanger", "Heating or Cooling Arrangements")
+      grips: getGripsForComponent(
+        "Heat Exchanger",
+        "Heating or Cooling Arrangements",
+      ),
     },
     "Immersion Coil": {
       name: "Immersion Coil",
@@ -316,7 +333,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "E",
       suffix: "A",
-      grips: getGripsForComponent("Immersion Coil", "Heating or Cooling Arrangements")
+      grips: getGripsForComponent(
+        "Immersion Coil",
+        "Heating or Cooling Arrangements",
+      ),
     },
     "Kettle Reboiler": {
       name: "Kettle Reboiler",
@@ -327,10 +347,13 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "C",
       suffix: "",
-      grips: getGripsForComponent("Kettle Reboiler", "Heating or Cooling Arrangements")
-    }
+      grips: getGripsForComponent(
+        "Kettle Reboiler",
+        "Heating or Cooling Arrangements",
+      ),
+    },
   },
-  "Piping": {
+  Piping: {
     "Inflow Line": {
       name: "Inflow Line",
       icon: InflowLineIcon,
@@ -340,7 +363,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "E",
       suffix: "B",
-      grips: getGripsForComponent("Inflow Line", "Piping")
+      grips: getGripsForComponent("Inflow Line", "Piping"),
     },
     "Outflow Line": {
       name: "Outflow Line",
@@ -351,10 +374,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "E",
       suffix: "",
-      grips: getGripsForComponent("Outflow Line", "Piping")
-    }
+      grips: getGripsForComponent("Outflow Line", "Piping"),
+    },
   },
-  "Fittings": {
+  Fittings: {
     "Reducer, Expander": {
       name: "Reducer, Expander",
       icon: ReducerExpanderIcon,
@@ -364,9 +387,9 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "E",
       suffix: "A",
-      grips: getGripsForComponent("Reducer, Expander", "Fittings")
+      grips: getGripsForComponent("Reducer, Expander", "Fittings"),
     },
-    "Filter": {
+    Filter: {
       name: "Filter",
       icon: FilterIcon,
       svg: FilterSVG,
@@ -375,8 +398,8 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "C",
       suffix: "B",
-      grips: getGripsForComponent("Filter", "Fittings")
-    }
+      grips: getGripsForComponent("Filter", "Fittings"),
+    },
   },
   "Process Vessels": {
     "Horizontal Vessel": {
@@ -388,7 +411,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "B",
-      grips: getGripsForComponent("Horizontal Vessel", "Process Vessels")
+      grips: getGripsForComponent("Horizontal Vessel", "Process Vessels"),
     },
     "Packed Vessel": {
       name: "Packed Vessel",
@@ -399,7 +422,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "C",
       suffix: "B",
-      grips: getGripsForComponent("Packed Vessel", "Process Vessels")
+      grips: getGripsForComponent("Packed Vessel", "Process Vessels"),
     },
     "Trays or plates": {
       name: "Trays or plates",
@@ -407,7 +430,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       svg: TraysOrPlatesSVG,
       class: "Process Vessels",
       object: "TraysOrPlates",
-      args: []
+      args: [],
     },
     "Vertical Vessel": {
       name: "Vertical Vessel",
@@ -418,10 +441,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "A/B",
-      grips: getGripsForComponent("Vertical Vessel", "Process Vessels")
-    }
+      grips: getGripsForComponent("Vertical Vessel", "Process Vessels"),
+    },
   },
-  "Pumps": {
+  Pumps: {
     "Blowing Egg": {
       name: "Blowing Egg",
       icon: BlowingEggIcon,
@@ -431,7 +454,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "A/B",
-      grips: getGripsForComponent("Blowing Egg", "Pumps")
+      grips: getGripsForComponent("Blowing Egg", "Pumps"),
     },
     "Duplex Pump": {
       name: "Duplex Pump",
@@ -442,7 +465,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "PRV",
       suffix: "",
-      grips: getGripsForComponent("Duplex Pump", "Pumps")
+      grips: getGripsForComponent("Duplex Pump", "Pumps"),
     },
     "Ejector(Vapor Service)": {
       name: "EjectorVapor Service",
@@ -453,7 +476,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "A/B",
-      grips: getGripsForComponent("Ejector(Vapor Service)", "Pumps")
+      grips: getGripsForComponent("Ejector(Vapor Service)", "Pumps"),
     },
     "Hand Pump with Drum": {
       name: "Hand Pump with Drum",
@@ -464,7 +487,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "A",
-      grips: getGripsForComponent("Hand Pump with Drum", "Pumps")
+      grips: getGripsForComponent("Hand Pump with Drum", "Pumps"),
     },
     "Plunger Pump": {
       name: "Plunger Pump",
@@ -475,7 +498,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "",
-      grips: getGripsForComponent("Plunger Pump", "Pumps")
+      grips: getGripsForComponent("Plunger Pump", "Pumps"),
     },
     "Proportioning Pump": {
       name: "Proportioning Pump",
@@ -486,7 +509,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "PRV",
       suffix: "A/B",
-      grips: getGripsForComponent("Proportioning Pump", "Pumps")
+      grips: getGripsForComponent("Proportioning Pump", "Pumps"),
     },
     "Reciprocating Pump": {
       name: "Reciprocating Pump",
@@ -497,7 +520,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "E",
       suffix: "",
-      grips: getGripsForComponent("Reciprocating Pump", "Pumps")
+      grips: getGripsForComponent("Reciprocating Pump", "Pumps"),
     },
     "Centrifugal Pump": {
       name: "Centrifugal Pump",
@@ -508,10 +531,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "PRV",
       suffix: "A/B",
-      grips: getGripsForComponent("Centrifugal Pump", "Pumps")
-    }
+      grips: getGripsForComponent("Centrifugal Pump", "Pumps"),
+    },
   },
-  "Separators": {
+  Separators: {
     "Separators for Liquids, Decanter": {
       name: "Separators for Liquids, Decanter",
       icon: SeparatorsForLiquidsDecanterIcon,
@@ -521,8 +544,11 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "C",
       suffix: "B",
-      grips: getGripsForComponent("Separators for Liquids, Decanter", "Separators")
-    }
+      grips: getGripsForComponent(
+        "Separators for Liquids, Decanter",
+        "Separators",
+      ),
+    },
   },
   "Storage Vessels Tanks": {
     "Fixed Roof Tank": {
@@ -534,7 +560,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "A/B",
-      grips: getGripsForComponent("Fixed Roof Tank", "Storage Vessels Tanks")
+      grips: getGripsForComponent("Fixed Roof Tank", "Storage Vessels Tanks"),
     },
     "Floating Roof Tank": {
       name: "Floating Roof Tank",
@@ -545,10 +571,13 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "",
-      grips: getGripsForComponent("Floating Roof Tank", "Storage Vessels Tanks")
-    }
+      grips: getGripsForComponent(
+        "Floating Roof Tank",
+        "Storage Vessels Tanks",
+      ),
+    },
   },
-  "Valves": {
+  Valves: {
     "Gate Valve": {
       name: "Gate Valve",
       icon: GateValveIcon,
@@ -558,7 +587,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "E",
       suffix: "A",
-      grips: getGripsForComponent("Gate Valve", "Valves")
+      grips: getGripsForComponent("Gate Valve", "Valves"),
     },
     "Butterfly Valve": {
       name: "Butterfly Valve",
@@ -569,7 +598,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "C",
       suffix: "",
-      grips: getGripsForComponent("Butterfly Valve", "Valves")
+      grips: getGripsForComponent("Butterfly Valve", "Valves"),
     },
     "Float Valve": {
       name: "Float Valve",
@@ -580,7 +609,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "PRV",
       suffix: "B",
-      grips: getGripsForComponent("Float Valve", "Valves")
+      grips: getGripsForComponent("Float Valve", "Valves"),
     },
     "Globe Valve": {
       name: "Globe Valve",
@@ -591,10 +620,10 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "A/B",
-      grips: getGripsForComponent("Globe Valve", "Valves")
-    }
+      grips: getGripsForComponent("Globe Valve", "Valves"),
+    },
   },
-  "Dryers": {
+  Dryers: {
     "Continuos Dryer": {
       name: "Continuos Dryer",
       icon: ContinuousDryerIcon,
@@ -604,8 +633,8 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "A",
-      grips: getGripsForComponent("Continuous Dryer", "Dryers")
-    }
+      grips: getGripsForComponent("Continuous Dryer", "Dryers"),
+    },
   },
   "Size Reduction Equipements": {
     "Jaw Crusher": {
@@ -617,7 +646,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "A/B",
-      grips: getGripsForComponent("Jaw Crusher", "Size Reduction Equipements")
+      grips: getGripsForComponent("Jaw Crusher", "Size Reduction Equipements"),
     },
     "Roller Crusher": {
       name: "Roller Crusher",
@@ -628,10 +657,13 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "SR",
       suffix: "B",
-      grips: getGripsForComponent("Roller Crusher", "Size Reduction Equipements")
-    }
+      grips: getGripsForComponent(
+        "Roller Crusher",
+        "Size Reduction Equipements",
+      ),
+    },
   },
-  "Feeders": {
+  Feeders: {
     "General Symbol": {
       name: "General Symbol",
       icon: GeneralSymbolIcon,
@@ -641,8 +673,7 @@ export const componentsConfig: Record<string, Record<string, ComponentItem>> = {
       args: [],
       legend: "P",
       suffix: "A/B",
-      grips: getGripsForComponent("General Symbol", "Feeders")
-    }
-  }
+      grips: getGripsForComponent("General Symbol", "Feeders"),
+    },
+  },
 };
-

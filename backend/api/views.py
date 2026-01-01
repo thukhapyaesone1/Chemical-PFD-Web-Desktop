@@ -181,8 +181,7 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
         # Update Project fields
         project_data = {
             "name": request.data.get("name", project.name),
-            "description": request.data.get("description", project.description),
-            "thumbnail": request.data.get("thumbnail", project.thumbnail)
+            "description": request.data.get("description", project.description)
         }
 
         serializer = self.get_serializer(project, data=project_data, partial=partial)
@@ -212,8 +211,7 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
                     "rotation": item.get("rotation", 0),
                     "scaleX": item.get("scaleX", 1),
                     "scaleY": item.get("scaleY", 1),
-                    "sequence": item.get("sequence", 0),
-                    "connections": item.get("connections", [])
+                    "sequence": item.get("sequence", 0)
                 }
             )
 

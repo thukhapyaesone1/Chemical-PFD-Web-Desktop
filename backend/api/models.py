@@ -6,7 +6,6 @@ class Project(models.Model):
     user = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField( auto_now=True)
-    thumbnail = models.ImageField(upload_to="thumbnails/", null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -37,7 +36,6 @@ class CanvasState(models.Model):
     scaleX = models.FloatField(default=1)
     scaleY = models.FloatField(default=1)
     sequence = models.IntegerField()
-    connections = models.JSONField(default=list)
 
 class Connection(models.Model):
     sourceItemId = models.ForeignKey(CanvasState, on_delete=models.CASCADE, related_name="sources")
