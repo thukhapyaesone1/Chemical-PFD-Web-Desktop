@@ -80,12 +80,7 @@ export interface CanvasItemImageProps {
   onChange: (newAttrs: CanvasItem) => void;
   onDragEnd?: (item: CanvasItem) => void;
   onTransformEnd?: (item: CanvasItem) => void;
-  onGripMouseDown?: (
-    itemId: number,
-    gripIndex: number,
-    x: number,
-    y: number,
-  ) => void;
+  onGripMouseDown?: (itemId: number, gripIndex: number, x: number, y: number) => void;
   onGripMouseEnter?: (itemId: number, gripIndex: number) => void;
   onGripMouseLeave?: () => void;
   isDrawingConnection?: boolean;
@@ -102,21 +97,8 @@ export interface CanvasPropertiesSidebarProps {
   showAllItemsByDefault?: boolean;
 }
 
-// Export image types
-export type ExportFormat = "png" | "jpg" | "svg" | "pdf";
-export type ExportQuality = "low" | "medium" | "high";
-
-export interface ExportOptions {
-  format: ExportFormat;
-  quality: ExportQuality;
-  scale: number;
-  includeGrid: boolean;
-  includeWatermark: boolean;
-  watermarkText: string;
-  padding: number;
-  backgroundColor: string;
-}
-
+// Export image types 
+ 
 export interface ExportPreset {
   id: string;
   name: string;
@@ -124,62 +106,85 @@ export interface ExportPreset {
   options: Partial<ExportOptions>;
 }
 
+ 
+export type ExportFormat = 'png' | 'jpg' | 'pdf' | 'svg';
+export type ExportQuality = 'low' | 'medium' | 'high';
+
+export interface ExportOptions {
+  format: ExportFormat;
+  scale: number;
+  quality: ExportQuality;
+  padding: number;
+  backgroundColor: string | 'transparent';
+  showGrid?: boolean;  
+  includeWatermark?: boolean;
+  watermarkText?: string;
+  includeGrid?: boolean; 
+}
+
 export const defaultExportOptions: ExportOptions = {
-  format: "png",
-  quality: "high",
+  format: 'png',
   scale: 2,
-  includeGrid: false,
+  quality: 'high',
+  padding: 40,
+  backgroundColor: '#ffffff',
+  showGrid: false,
   includeWatermark: false,
-  watermarkText: "",
-  padding: 20,
-  backgroundColor: "#ffffff",
+  watermarkText: '',
+  includeGrid: false,
 };
 
-export const exportPresets: ExportPreset[] = [
+export const exportPresets = [
   {
-    id: "presentation",
-    name: "Presentation",
-    description: "High quality for slides",
+    id: 'presentation',
+    name: 'Presentation',
+    description: 'High-res PNG for slides',
     options: {
-      format: "png",
-      quality: "high",
+      format: 'png' as ExportFormat,
       scale: 2,
-      includeGrid: false,
-      backgroundColor: "#ffffff",
-    },
-  },
-  {
-    id: "print",
-    name: "Print",
-    description: "High resolution for printing",
-    options: {
-      format: "pdf",
-      quality: "high",
-      scale: 3,
-      includeGrid: false,
+      quality: 'high' as ExportQuality,
       padding: 40,
+      backgroundColor: '#ffffff',
+      showGrid: false,
     },
   },
   {
-    id: "web",
-    name: "Web",
-    description: "Optimized for web",
+    id: 'print',
+    name: 'Print',
+    description: 'PDF for printing',
     options: {
-      format: "jpg",
-      quality: "medium",
+      format: 'pdf' as ExportFormat,
+      scale: 3,
+      quality: 'high' as ExportQuality,
+      padding: 60,
+      backgroundColor: '#ffffff',
+      showGrid: false,
+    },
+  },
+  {
+    id: 'web',
+    name: 'Web',
+    description: 'Optimized JPG for web',
+    options: {
+      format: 'jpg' as ExportFormat,
       scale: 1,
-      includeGrid: false,
+      quality: 'medium' as ExportQuality,
+      padding: 20,
+      backgroundColor: '#ffffff',
+      showGrid: false,
     },
   },
   {
-    id: "technical",
-    name: "Technical",
-    description: "Include grid for documentation",
+    id: 'dark',
+    name: 'Dark Mode',
+    description: 'Dark background export',
     options: {
-      format: "svg",
-      quality: "high",
-      includeGrid: true,
-      padding: 30,
+      format: 'png' as ExportFormat,
+      scale: 2,
+      quality: 'high' as ExportQuality,
+      padding: 40,
+      backgroundColor: '#1e293b',
+      showGrid: false,
     },
   },
 ];
