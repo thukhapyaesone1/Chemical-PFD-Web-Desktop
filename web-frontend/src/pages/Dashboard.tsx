@@ -11,14 +11,23 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Textarea,
 } from "@heroui/react";
 import { useNavigate } from "react-router-dom";
 import { useState, useMemo, useEffect } from "react";
 import { CiFilter } from "react-icons/ci";
+import { MdEdit, MdDelete } from "react-icons/md";
 import { NewProjectModal } from "@/components/NewProjectModal";
 import {
   getProjects,
   createProject,
+  deleteProject,
+  saveProject,
   type SavedProject
 } from "@/utils/projectStorage";
 
@@ -30,6 +39,10 @@ export default function Dashboard() {
   const [sizeFilter, setSizeFilter] = useState("all");
   const [projects, setProjects] = useState<SavedProject[]>([]);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [editingProject, setEditingProject] = useState<SavedProject | null>(null);
+  const [deletingProject, setDeletingProject] = useState<SavedProject | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
 
   // Load projects from localStorage on mount
   useEffect(() => {
@@ -46,6 +59,38 @@ export default function Dashboard() {
 
     // Navigate to editor
     navigate(`/editor/${newProject.id}`);
+  };
+
+  const handleEditProject = (project: SavedProject) => {
+    setEditingProject(project);
+    setEditName(project.name);
+    setEditDescription(project.description || "");
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingProject) return;
+
+    const updatedProject = {
+      ...editingProject,
+      name: editName,
+      description: editDescription || null,
+    };
+
+    saveProject(updatedProject);
+    setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
+    setEditingProject(null);
+  };
+
+  const handleDeleteProject = (project: SavedProject) => {
+    setDeletingProject(project);
+  };
+
+  const confirmDelete = () => {
+    if (!deletingProject) return;
+
+    deleteProject(deletingProject.id);
+    setProjects(prev => prev.filter(p => p.id !== deletingProject.id));
+    setDeletingProject(null);
   };
 
   const filteredProjects = useMemo(() => {
@@ -245,11 +290,31 @@ export default function Dashboard() {
             >
               <CardHeader className="flex gap-3">
                 <div className="bg-primary/10 p-2 rounded-lg text-2xl">📄</div>
-                <div className="flex flex-col">
+                <div className="flex flex-col flex-grow">
                   <p className="text-md font-bold">{proj.name}</p>
                   <p className="text-small text-default-500">
                     Edited {getRelativeTime(proj.updated_at)}
                   </p>
+                </div>
+                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="light"
+                    className="text-gray-600 hover:text-blue-600 hover:bg-blue-100/50 dark:hover:bg-blue-900/30"
+                    onPress={() => handleEditProject(proj)}
+                  >
+                    <MdEdit size={18} />
+                  </Button>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="light"
+                    className="text-gray-600 hover:text-red-600 hover:bg-red-100/50 dark:hover:bg-red-900/30"
+                    onPress={() => handleDeleteProject(proj)}
+                  >
+                    <MdDelete size={18} />
+                  </Button>
                 </div>
               </CardHeader>
               <Divider />
@@ -281,6 +346,74 @@ export default function Dashboard() {
         onClose={() => setShowNewProjectModal(false)}
         onCreate={handleCreateNewProject}
       />
+
+      {/* Edit Project Modal */}
+      <Modal
+        isOpen={!!editingProject}
+        onClose={() => setEditingProject(null)}
+        placement="center"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">Edit Project</ModalHeader>
+          <ModalBody>
+            <Input
+              autoFocus
+              label="Project Name"
+              placeholder="Enter project name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+            />
+            <Textarea
+              label="Description (Optional)"
+              placeholder="Enter project description"
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={() => setEditingProject(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="primary"
+              isDisabled={!editName.trim()}
+              onPress={handleSaveEdit}
+            >
+              Save Changes
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deletingProject}
+        onClose={() => setDeletingProject(null)}
+        placement="center"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">Delete Project</ModalHeader>
+          <ModalBody>
+            <p>
+              Are you sure you want to delete <strong>{deletingProject?.name}</strong>?
+            </p>
+            <p className="text-sm text-gray-500">
+              This action cannot be undone. All diagram data will be permanently removed.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={() => setDeletingProject(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="danger"
+              onPress={confirmDelete}
+            >
+              Delete Project
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
