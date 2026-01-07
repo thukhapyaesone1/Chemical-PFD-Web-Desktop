@@ -199,18 +199,19 @@ useEffect(() => {
     .then((data) => {
       if (Array.isArray(data)) {
         setProjects(data);
-      } else if (Array.isArray(data?.results)) {
-        setProjects(data.results);
+      } else if (Array.isArray(data?.projects)) {
+        setProjects(data.projects);
       } else {
         console.error("Invalid projects API response:", data);
         setProjects([]);
       }
     })
     .catch((err) => {
-      console.error(err);
+      console.error("Failed to fetch projects:", err);
       setProjects([]);
     });
 }, []);
+
 
   const handleCreateNewProject = async (name: string, description: string) => {
     const project = await createProject(name, description || null);
@@ -352,7 +353,7 @@ useEffect(() => {
         <div className="text-center py-16">
           <div className="text-6xl mb-4">📄</div>
           <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            {projects.length === 0 ? "No projects yet" : "No projects found"}
+            {projects.length === 0 ? "No projects yet" : "No projects for search result"}
           </h2>
           <p className="text-gray-500 mb-6">
             {projects.length === 0
