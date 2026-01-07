@@ -4,7 +4,7 @@ from PyQt5 import QtWidgets, QtGui, QtSvg, QtCore
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QLineEdit, QTextEdit, QFileDialog
+    QPushButton, QLineEdit, QTextEdit, QFileDialog, QSplitter
 )
 
 from src.api_client import post_component
@@ -86,6 +86,9 @@ class DraggableGripItem(QtWidgets.QGraphicsEllipseItem):
                     "y": self.center_y,
                     "side": self.side
                 }
+                
+            # Update live preview
+            self.editor.update_preview()
         
         return super().itemChange(change, value)
 
@@ -94,7 +97,8 @@ class GripEditorDialog(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Grip Editor")
-        self.setMinimumSize(900, 800)
+        self.setMinimumSize(1000, 700)
+        self.resize(1400, 800)
         self.svg_path = svg_path
         self.auto_detect_edge = True  # Auto-detect edge by default
 
@@ -139,10 +143,9 @@ class GripEditorDialog(QDialog):
             "  • Ctrl/Cmd + Z → Undo\n"
             "  • Ctrl/Cmd + Shift + Z → Redo\n\n"
             
-            "📍 Grip Features\n"
-            "  • Grips show a number for easy identification\n"
-            "  • Automatic nearest-edge detection (Top / Right / Bottom / Left)\n"
-            "  • Manual override available via dropdown\n"
+            "📍 Live Preview\n"
+            "  • Right panel shows real-time preview of grips\n"
+            "  • Updates automatically as you add/move/delete grips\n"
         )
 
         help_action = QtWidgets.QAction("Show Commands", self)
@@ -176,14 +179,35 @@ class GripEditorDialog(QDialog):
         
         main_layout.addLayout(toolbar)
 
-        # ---------------- SCENE + VIEW ----------------
+        # ---------------- SPLITTER WITH EDITOR AND PREVIEW ----------------
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setHandleWidth(1)
+        splitter.setStyleSheet("""
+            QSplitter::handle {
+                background-color: #ddd;
+            }
+        """)
+        
+        # Left side: Editor
+        editor_widget = QtWidgets.QWidget()
+        editor_layout = QVBoxLayout(editor_widget)
+        editor_layout.setContentsMargins(5, 5, 5, 5)
+        editor_layout.setSpacing(5)
+        
+        editor_title = QLabel("Editor")
+        editor_title.setStyleSheet("""
+            font-size: 13px; 
+            font-weight: 600; 
+            padding: 8px; 
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            color: #495057;
+        """)
+        editor_layout.addWidget(editor_title)
+        
         self.scene = QtWidgets.QGraphicsScene()
-
-        # Permanent SVG object (never deleted)
         self.svg_item = QtSvg.QGraphicsSvgItem(svg_path)
         self.scene.addItem(self.svg_item)
-        
-        # Store SVG bounds for edge detection
         self.svg_bounds = self.svg_item.boundingRect()
 
         self.view = QtWidgets.QGraphicsView(self.scene)
@@ -194,13 +218,66 @@ class GripEditorDialog(QDialog):
         self.view.setDragMode(QtWidgets.QGraphicsView.NoDrag)
         self.view.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
         self.view.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
-
-        main_layout.addWidget(self.view)
-
-        # Capture events
         self.view.viewport().installEventFilter(self)
+        self.view.setStyleSheet("""
+            QGraphicsView {
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                background-color: white;
+            }
+        """)
+        
+        editor_layout.addWidget(self.view)
+        
+        # Right side: Live Preview (Fixed size)
+        preview_widget = QtWidgets.QWidget()
+        preview_widget.setMaximumWidth(350)
+        preview_widget.setMinimumWidth(300)
+        preview_layout = QVBoxLayout(preview_widget)
+        preview_layout.setContentsMargins(5, 5, 5, 5)
+        preview_layout.setSpacing(5)
+        
+        preview_title = QLabel("Live Preview")
+        preview_title.setStyleSheet("""
+            font-size: 13px; 
+            font-weight: 600; 
+            padding: 8px; 
+            background-color: #e7f5ff;
+            border-radius: 4px;
+            color: #0c5460;
+        """)
+        preview_layout.addWidget(preview_title)
+        
+        self.preview_scene = QtWidgets.QGraphicsScene()
+        self.preview_svg_item = QtSvg.QGraphicsSvgItem(svg_path)
+        self.preview_scene.addItem(self.preview_svg_item)
+        
+        self.preview_view = QtWidgets.QGraphicsView(self.preview_scene)
+        self.preview_view.setRenderHints(
+            QtGui.QPainter.Antialiasing |
+            QtGui.QPainter.SmoothPixmapTransform
+        )
+        self.preview_view.setStyleSheet("""
+            QGraphicsView {
+                background-color: #f8f9fa; 
+                border: 2px solid #adb5bd;
+                border-radius: 6px;
+            }
+        """)
+        preview_layout.addWidget(self.preview_view)
+        
+        # Fit preview to view
+        self.preview_view.fitInView(self.preview_svg_item, Qt.KeepAspectRatio)
+        
+        # Add both to splitter
+        splitter.addWidget(editor_widget)
+        splitter.addWidget(preview_widget)
+        splitter.setStretchFactor(0, 3)  # Editor takes more space
+        splitter.setStretchFactor(1, 1)  # Preview is smaller
+        
+        main_layout.addWidget(splitter)
 
-        # ---------------- SIDE SELECT (manual override) ----------------
+        # ---------------- SIDE SELECT ----------------
         side_layout = QHBoxLayout()
         side_layout.addWidget(QLabel("Manual Side Override:"))
         self.side_select = QtWidgets.QComboBox()
@@ -241,7 +318,6 @@ class GripEditorDialog(QDialog):
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+-"), self, lambda: self.zoom(False))
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+0"), self, self.reset_zoom)
 
-        # macOS versions
         QtWidgets.QShortcut(QtGui.QKeySequence("Meta+Z"), self, self.undo)
         QtWidgets.QShortcut(QtGui.QKeySequence("Meta+Shift+Z"), self, self.redo)
         QtWidgets.QShortcut(QtGui.QKeySequence("Meta++"), self, lambda: self.zoom(True))
@@ -249,20 +325,39 @@ class GripEditorDialog(QDialog):
         QtWidgets.QShortcut(QtGui.QKeySequence("Meta+-"), self, lambda: self.zoom(False))
         QtWidgets.QShortcut(QtGui.QKeySequence("Meta+0"), self, self.reset_zoom)
 
-    # ------------------------------------------
-    # Edge Detection
-    # ------------------------------------------
+    def update_preview(self):
+        """Update the live preview with current grips"""
+        # Clear existing preview grips
+        for item in self.preview_scene.items():
+            if isinstance(item, QtWidgets.QGraphicsEllipseItem):
+                self.preview_scene.removeItem(item)
+        
+        # Draw all current grips on preview
+        svg_bounds = self.preview_svg_item.boundingRect()
+        for i, point in enumerate(self.points):
+            # Convert percentage to absolute (for display purposes, calculate from editor coords)
+            x = point["x"]
+            y = point["y"]
+            
+            # Draw grip point
+            radius = 5
+            ellipse = QtWidgets.QGraphicsEllipseItem(
+                x - radius, y - radius, 2*radius, 2*radius
+            )
+            ellipse.setPen(QtGui.QPen(Qt.NoPen))
+            ellipse.setBrush(QtGui.QBrush(QtGui.QColor(220, 53, 69, 180)))
+            ellipse.setZValue(10)
+            self.preview_scene.addItem(ellipse)
+
     def detect_nearest_edge(self, x, y):
         """Detect which edge of the SVG is nearest to the point"""
         bounds = self.svg_bounds
         
-        # Calculate distances to each edge
         dist_top = abs(y - bounds.top())
         dist_bottom = abs(y - bounds.bottom())
         dist_left = abs(x - bounds.left())
         dist_right = abs(x - bounds.right())
         
-        # Find minimum distance
         min_dist = min(dist_top, dist_bottom, dist_left, dist_right)
         
         if min_dist == dist_top:
@@ -277,21 +372,12 @@ class GripEditorDialog(QDialog):
     def toggle_auto_edge(self, state):
         self.auto_detect_edge = (state == Qt.Checked)
 
-    # ------------------------------------------
-    # Event handling
-    # ------------------------------------------
     def eventFilter(self, obj, event):
         if obj == self.view.viewport():
-
-            # -----------------------------
-            # Handle dragging (trackpad or mouse)
-            # -----------------------------
             if event.type() == QtCore.QEvent.MouseMove:
-                # Check if we're over a grip item
                 scene_pos = self.view.mapToScene(event.pos())
                 item = self.scene.itemAt(scene_pos, self.view.transform())
                 
-                # Only allow panning if NOT over a grip
                 if not isinstance(item, DraggableGripItem):
                     if getattr(self, "_is_dragging", False):
                         delta = event.pos() - self._last_mouse_pos
@@ -304,7 +390,6 @@ class GripEditorDialog(QDialog):
                         self._last_mouse_pos = event.pos()
                         return True
 
-                    # detect start of drag if moved enough
                     if (event.buttons() & Qt.LeftButton):
                         if (event.pos() - self._press_pos).manhattanLength() > 4:
                             self._is_dragging = True
@@ -312,108 +397,78 @@ class GripEditorDialog(QDialog):
                             self._last_mouse_pos = event.pos()
                             return True
 
-            # -----------------------------
-            # Start click
-            # -----------------------------
             if event.type() == QtCore.QEvent.MouseButtonPress:
                 if event.button() == Qt.LeftButton:
                     self._press_pos = event.pos()
                     self._is_dragging = False
                     
-                    # Check if clicking on a grip - let it handle the event
                     scene_pos = self.view.mapToScene(event.pos())
                     item = self.scene.itemAt(scene_pos, self.view.transform())
                     if isinstance(item, DraggableGripItem):
-                        return False  # Let the grip handle it
+                        return False
                     
                     return True
 
-            # -----------------------------
-            # End click → add point if NOT a drag
-            # -----------------------------
             if event.type() == QtCore.QEvent.MouseButtonRelease:
-                # end drag
                 self.view.setCursor(Qt.ArrowCursor)
 
                 if event.button() == Qt.LeftButton:
-                    # If was a drag, do NOT place a grip
                     if getattr(self, "_is_dragging", False):
                         self._is_dragging = False
                         return True
 
-                    # Check if we released on a grip
                     scene_pos = self.view.mapToScene(event.pos())
                     item = self.scene.itemAt(scene_pos, self.view.transform())
                     if isinstance(item, DraggableGripItem):
-                        return False  # Let the grip handle it
+                        return False
 
-                    # This was a REAL click → place grip
                     self.push_undo()
                     self.add_point(scene_pos)
                     return True
 
-            # -----------------------------
-            # Mouse wheel zoom
-            # -----------------------------
             if event.type() == QtCore.QEvent.Wheel:
                 self.zoom(event.angleDelta().y() > 0)
                 return True
 
         return super().eventFilter(obj, event)
 
-    # ------------------------------------------
-    # Zoom Handling
-    # ------------------------------------------
     def zoom(self, zoom_in=True):
         factor = 1.15 if zoom_in else 1 / 1.15
-
-        # Prevent infinite zoom in/out
         current = self.view.transform().m11()
         if zoom_in and current > 40:
             return
         if (not zoom_in) and current < 0.05:
             return
-
         self.view.scale(factor, factor)
     
     def reset_zoom(self):
-        """Reset zoom to fit SVG in view"""
         self.view.resetTransform()
         self.view.fitInView(self.svg_item, Qt.KeepAspectRatio)
 
-    # ------------------------------------------
-    # Adding points
-    # ------------------------------------------
     def add_point(self, pos):
-        # Determine side
         if self.side_select.currentText() == "Auto":
             side = self.detect_nearest_edge(pos.x(), pos.y())
         else:
             side = self.side_select.currentText()
         
-        # Add to points list
         index = len(self.points)
         self.points.append({"x": pos.x(), "y": pos.y(), "side": side})
         
-        # Draw the grip
         self.draw_grip(pos.x(), pos.y(), side, index)
+        self.update_preview()
 
     def draw_grip(self, x, y, side, index):
-        """Draw a draggable grip item"""
         grip = DraggableGripItem(x, y, side, index, self)
         self.scene.addItem(grip)
         self.grip_items.append(grip)
 
     def delete_grip(self, index):
-        """Delete a grip by index"""
         if 0 <= index < len(self.points):
             self.push_undo()
             self.points.pop(index)
             self.refresh_grips()
+            self.update_preview()
 
-    # ------------------------------------------
-    # Undo / Redo
-    # ------------------------------------------
     def push_undo(self):
         import copy
         self.undo_stack.append(copy.deepcopy(self.points))
@@ -422,44 +477,36 @@ class GripEditorDialog(QDialog):
     def undo(self):
         if not self.undo_stack:
             return
-
         import copy
         self.redo_stack.append(copy.deepcopy(self.points))
         self.points = self.undo_stack.pop()
         self.refresh_grips()
+        self.update_preview()
 
     def redo(self):
         if not self.redo_stack:
             return
-
         import copy
         self.undo_stack.append(copy.deepcopy(self.points))
         self.points = self.redo_stack.pop()
         self.refresh_grips()
+        self.update_preview()
 
     def refresh_grips(self):
-        """Refresh all grip items (not SVG)"""
-        # Remove all grip items
         for grip in self.grip_items:
             self.scene.removeItem(grip)
         self.grip_items.clear()
 
-        # Redraw all grips
         for i, p in enumerate(self.points):
             self.draw_grip(p["x"], p["y"], p["side"], i)
 
-    # ------------------------------------------
-    # JSON output
-    # ------------------------------------------
     def get_grips_json(self):
-        """Convert absolute coordinates to percentages (0-100) relative to SVG bounds"""
         bounds = self.svg_bounds
         width = bounds.width()
         height = bounds.height()
         left = bounds.left()
         top = bounds.top()
         
-        # Convert to percentages
         percentage_grips = []
         for p in self.points:
             x_percent = ((p["x"] - left) / width) * 100.0 if width > 0 else 0
