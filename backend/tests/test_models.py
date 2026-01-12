@@ -31,7 +31,6 @@ class ComponentModelTest(TestCase):
             svg=self.svg_file,
             png=self.png_file
         )
-        
         self.assertEqual(component.name, 'Resistor')
         self.assertEqual(component.s_no, '1')
         self.assertEqual(component.legend, 'R')
@@ -40,16 +39,14 @@ class ComponentModelTest(TestCase):
         self.assertEqual(component.grips, 'Grips')
         self.assertIsNotNone(component.svg)
         self.assertIsNotNone(component.png)
-    
+
     def test_create_component_minimal_fields(self):
         """Test creating a component with minimal required fields."""
         component = Component.objects.create(
             name='Resistor',
             svg=self.svg_file,
             png=self.png_file
-        )
-
-        
+        )        
         self.assertEqual(component.name, 'Resistor')
         self.assertIsNotNone(component.svg)
         self.assertIsNotNone(component.png)

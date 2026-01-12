@@ -175,16 +175,16 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     # UPDATE (project only)
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop("partial", False)
+        partial =True
+
         project = self.get_object()
 
         # Update Project fields
-        project_data = {
-            "name": request.data.get("name", project.name),
-            "description": request.data.get("description", project.description)
-        }
-
-        serializer = self.get_serializer(project, data=project_data, partial=partial)
+        serializer = self.get_serializer(
+            project,
+            data=request.data,
+            partial=partial
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -195,8 +195,18 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
 
         for item in items:
             unique_id = item.get("id")
+            print("Unique ID:", unique_id)
             if not unique_id:
-                continue
+                return Response({
+                    'status': 'error',
+                    'message': f'Temporary ID is required for canvas item'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if not item.get("component") or item["component"].get("id") is None:
+                # component missing OR component.id missing
+                return Response({
+                    'status': 'error',
+                    'message': f'Component ID is required for canvas item with temporary ID {unique_id}'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             CanvasState.objects.update_or_create(
                 id=unique_id,

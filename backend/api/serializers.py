@@ -3,6 +3,10 @@ from .models import Component, Project, CanvasState, Connection
 import json
 
 class ProjectSerializer(serializers.ModelSerializer):
+    thumbnail = serializers.ImageField(
+        required=False,
+        allow_null=True
+    )
     class Meta:
         model = Project
         fields = "__all__"
@@ -12,6 +16,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
 
     def create(self, validated_data):
         request = self.context["request"]
