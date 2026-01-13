@@ -198,93 +198,76 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     # UPDATE (project only)
     def update(self, request, *args, **kwargs):
-        partial =True
-
         project = self.get_object()
-
-        # Update Project fields
-        serializer = self.get_serializer(
-            project,
-            data=request.data,
-            partial=partial
-        )
+        
+        # 1. Update project metadata (standard DRF)
+        partial = kwargs.pop('partial', False)
+        serializer = self.get_serializer(project, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        self.perform_update(serializer)
+        
+        # 2. Handle canvas_state manually
+        canvas_data = request.data.get("canvas_state")
+        
+        if canvas_data:
+            from django.db import transaction
+            from .models import CanvasState, Connection 
+            
+            with transaction.atomic():
+                # A. Clear existing state
+                CanvasState.objects.filter(project=project).delete()
+                
+                # B. Re-create Items
+                items_data = canvas_data.get("items", [])
+                connections_data = canvas_data.get("connections", [])
+                
+                id_map = {} # old_id -> new_instance_id
 
-        # Update CanvasState items
-        canvas_state = request.data.get("canvas_state", {})
-        items = canvas_state.get("items", [])
-        connections = canvas_state.get("connections", [])
+                for item in items_data:
+                    old_id = item.get("id")
+                    comp_id = item.get("component_id")
+                    
+                    if not comp_id:
+                         continue
+                         
+                    new_item = CanvasState.objects.create(
+                        project=project,
+                        component_id=comp_id,
+                        label=item.get("label", ""),
+                        x=item.get("x", 0),
+                        y=item.get("y", 0),
+                        width=item.get("width", 50),
+                        height=item.get("height", 50),
+                        rotation=item.get("rotation", 0),
+                        scaleX=item.get("scaleX", 1),
+                        scaleY=item.get("scaleY", 1),
+                        sequence=item.get("sequence", 0),
+                    )
+                    
+                    if old_id is not None:
+                        id_map[old_id] = new_item.id
 
-        for item in items:
-            unique_id = item.get("id")
-            print("Unique ID:", unique_id)
-            if not unique_id:
-                return Response({
-                    'status': 'error',
-                    'message': f'Temporary ID is required for canvas item'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            if not item.get("component") or item["component"].get("id") is None:
-                # component missing OR component.id missing
-                return Response({
-                    'status': 'error',
-                    'message': f'Component ID is required for canvas item with temporary ID {unique_id}'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                # C. Re-create Connections
+                for conn in connections_data:
+                    source_old_id = conn.get("sourceItemId")
+                    target_old_id = conn.get("targetItemId")
+                    
+                    real_source_id = id_map.get(source_old_id)
+                    real_target_id = id_map.get(target_old_id)
+                    
+                    if real_source_id and real_target_id:
+                        Connection.objects.create(
+                            sourceItemId_id=real_source_id,
+                            targetItemId_id=real_target_id,
+                            sourceGripIndex=conn.get("sourceGripIndex", 0),
+                            targetGripIndex=conn.get("targetGripIndex", 0),
+                            waypoints=conn.get("waypoints", [])
+                        )
 
-            CanvasState.objects.update_or_create(
-                id=unique_id,
-                defaults={
-                    "project": project,
-                    "component_id": item.get("component", {}).get("id") if item.get("component") else None,
-                    "label": item.get("label"),
-                    "x": item.get("x"),
-                    "y": item.get("y"),
-                    "width": item.get("width"),
-                    "height": item.get("height"),
-                    "rotation": item.get("rotation", 0),
-                    "scaleX": item.get("scaleX", 1),
-                    "scaleY": item.get("scaleY", 1),
-                    "sequence": item.get("sequence", 0)
-                }
-            )
+        # Return the updated project with new canvas state
+        return self.retrieve(request, *args, **kwargs)
 
-        # Update Connections
-        for conn in connections:
-            conn_id = conn.get("id")
-            source_id = conn.get("sourceItemId")
-            target_id = conn.get("targetItemId")
 
-            if not source_id or not target_id:
-                continue
-
-            Connection.objects.update_or_create(
-                id=conn_id,
-                defaults={
-                    "sourceItemId_id": source_id,
-                    "sourceGripIndex": conn.get("sourceGripIndex", 0),
-                    "targetItemId_id": target_id,
-                    "targetGripIndex": conn.get("targetGripIndex", 0),
-                    "waypoints": conn.get("waypoints", [])
-                }
-            )
-
-        # Prepare response
-        project.refresh_from_db()
-        canvas_items = CanvasState.objects.filter(project=project)
-        canvas_items_data = CanvasStateSerializer(canvas_items, many=True).data
-        connection_data = ConnectionSerializer(
-            Connection.objects.filter(sourceItemId__project=project),
-            many=True
-        ).data
-
-        response_data = ProjectSerializer(project).data
-        response_data["status"] = "success"
-        response_data["canvas_state"] = {
-            "items": canvas_items_data,
-            "connections": connection_data,
-            "sequence_counter": canvas_items.last().sequence + 1 if canvas_items.exists() else 0
-        } 
-        return Response(response_data, status=status.HTTP_200_OK)
 
 
 
