@@ -319,7 +319,6 @@ export default function Components() {
                     }
                   >
                     <Card
-                      isPressable
                       className="border-none bg-white dark:bg-gray-800 shadow-sm hover:shadow-md group relative"
                     >
                       <CardBody className="p-4 flex items-center justify-center bg-gray-50/50 dark:bg-gray-900/50">
@@ -340,16 +339,18 @@ export default function Components() {
                         <div className="text-small font-medium truncate w-full text-center text-gray-700 dark:text-gray-300">
                           {item.name}
                         </div>
-                          <Button
-                            isIconOnly
-                            aria-label="Edit"
-                            className="absolute top-1 right-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-white/50 backdrop-blur-sm z-10"
-                            size="sm"
-                            variant="light"
-                            onPress={() => handleEdit(catName, item)}
-                          >
-                            <span className="text-lg">✎</span>
-                          </Button>
+                        <Button
+                          isIconOnly
+                          aria-label="Edit"
+                          className="absolute top-1 right-1 opacity-100 group-hover:opacity-100 transition-opacity bg-white/50 backdrop-blur-sm z-20"
+                          size="sm"
+                          variant="light"
+                          onPress={(e) => {
+                            handleEdit(catName, item);
+                          }}
+                        >
+                          <span className="text-lg">✎</span>
+                        </Button>
                       </CardFooter>
                     </Card>
                   </Tooltip>

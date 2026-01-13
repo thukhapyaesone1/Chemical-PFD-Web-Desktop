@@ -140,7 +140,7 @@ export async function updateComponent(
     if (data.svg) formData.append('svg', data.svg);
     if (data.png) formData.append('png', data.png);
 
-    const response = await client.put<ComponentData>(`/components/${id}/`, formData, {
+    const response = await client.patch<ComponentData>(`/components/${id}/`, formData, {
         headers: {
             'Content-Type': 'multipart/form-data',
         },
