@@ -158,7 +158,7 @@ export default function Editor() {
               (item.component ? item.component.name : "");
             const rawSvg = item.svg || "";
             const rawPng = item.png || "";
-            
+
             return {
               id: item.id,
               name:
@@ -375,104 +375,291 @@ export default function Editor() {
       event.target.value = ""; // Reset file input
     }
   };
+  const waitForKonvaImages = async (stage: Konva.Stage) => {
+    const imageNodes = stage.find("Image") as Konva.Image[];
+
+    await Promise.all(
+      imageNodes.map(
+        (node) =>
+          new Promise<void>((resolve) => {
+            const img = node.image();
+
+            if (!img) {
+              resolve();
+              return;
+            }
+
+            // Already loaded
+            if (img.complete && img.naturalWidth > 0) {
+              resolve();
+              return;
+            }
+
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          }),
+      ),
+    );
+  };
+
   // In your Editor.tsx handleExport function:
+
   const handleExport = async (options: ExportOptions) => {
     if (!projectId || !currentState) {
       alert("No project loaded");
-
       return;
     }
 
     setIsExporting(true);
-
-    // Save current grid state for image exports
     const originalShowGrid = showGrid;
 
     try {
+      /* =========================
+     DIAGRAM FILE EXPORT (.pfd)
+     ========================= */
       if (options.format === "export") {
-        // Custom diagram file export
         const exportData = createExportData(
           currentState,
           {
             scale: stageScale,
             position: stagePos,
-            gridSize: gridSize,
-            showGrid: showGrid,
-            snapToGrid: snapToGrid,
+            gridSize,
+            showGrid,
+            snapToGrid,
           },
           projectId,
           `Diagram ${projectId}`,
         );
 
-        // Use the filename from options or generate default
         const fileName = options.filename
           ? `${options.filename}.pfd`
           : `diagram-${projectId}.pfd`;
 
         exportToDiagramFile(exportData, fileName);
         setShowExportModal(false);
-
         return;
       }
 
-      // Original image export code
+      /* =========================
+     IMAGE / PDF EXPORT
+     ========================= */
       if (!stageRef.current) {
-        throw new Error("Stage not available");
+        throw new Error("Canvas not ready");
       }
 
-      // Temporarily update grid visibility for image exports
+      // Apply grid option
       if (options.includeGrid !== undefined) {
         setShowGrid(options.includeGrid);
       }
 
-      // Force a re-render to update the canvas
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Let React re-render
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Use the updated exportDiagram function with connections
-      const result = await exportDiagram(stageRef.current, droppedItems, {
-        ...options,
-        connections: connections,
-      });
+      const stage = stageRef.current;
 
-      // Use the filename from options with correct extension
-      let filename: string;
+      // Force draw
+      stage.batchDraw();
 
-      if (options.filename) {
-        // Ensure correct extension based on format
-        const extension =
-          options.format === "pdf"
-            ? ".pdf"
-            : options.format === "jpg"
-              ? ".jpg"
-              : ".png";
+      // WAIT FOR ALL IMAGES TO LOAD
+      await waitForKonvaImages(stage);
 
-        // Check if filename already has extension
-        const hasCorrectExtension = options.filename
-          .toLowerCase()
-          .endsWith(extension);
+      // Extra frame for safety
+      await new Promise((resolve) => requestAnimationFrame(resolve));
 
-        filename = hasCorrectExtension
-          ? options.filename
-          : `${options.filename}${extension}`;
-      } else {
-        // Default filename
-        const timestamp = new Date().toISOString().split("T")[0];
+      /* =========================
+     DETERMINE BACKGROUND COLOR
+     ========================= */
+      // Get the actual stage background color
+      const isDarkMode = document.documentElement.classList.contains("dark");
+      const defaultBackground = isDarkMode ? "#1f2937" : "#ffffff";
 
-        filename = `diagram-${timestamp}.${options.format}`;
+      let backgroundFill = options.backgroundColor || defaultBackground;
+
+      // Handle transparent background
+      if (backgroundFill === "transparent") {
+        backgroundFill = "rgba(0,0,0,0)";
       }
 
-      downloadBlob(result as Blob, filename);
+      console.log("Export settings:", {
+        background: backgroundFill,
+        isDarkMode,
+        format: options.format,
+        scale: options.scale,
+        quality: options.quality,
+      });
+
+      /* =========================
+     EXPORT TO DATA URL
+     ========================= */
+      const pixelRatio = options.scale ?? 2;
+      const mimeType = options.format === "jpg" ? "image/jpeg" : "image/png";
+      const quality =
+        options.quality === "low"
+          ? 0.7
+          : options.quality === "medium"
+            ? 0.85
+            : 1;
+
+      // IMPORTANT: Create a temporary stage clone with fixed background
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "absolute";
+      tempContainer.style.left = "-9999px";
+      tempContainer.style.top = "-9999px";
+      tempContainer.style.width = `${stage.width()}px`;
+      tempContainer.style.height = `${stage.height()}px`;
+      document.body.appendChild(tempContainer);
+
+      const tempStage = new Konva.Stage({
+        container: tempContainer,
+        width: stage.width(),
+        height: stage.height(),
+      });
+
+      // Add background layer first
+      if (backgroundFill !== "rgba(0,0,0,0)") {
+        const bgLayer = new Konva.Layer();
+        const bgRect = new Konva.Rect({
+          x: 0,
+          y: 0,
+          width: stage.width(),
+          height: stage.height(),
+          fill: backgroundFill,
+        });
+        bgLayer.add(bgRect);
+        tempStage.add(bgLayer);
+      }
+
+      // Clone the main layer (skip grid if not needed)
+      const originalLayer = stage.findOne("Layer");
+      if (originalLayer) {
+        const clonedLayer = originalLayer.clone({
+          listening: false,
+        });
+
+        // Remove grid if not included
+        if (!options.includeGrid) {
+          clonedLayer
+            .find(".grid-line, .grid-shape")
+            .forEach((node) => node.destroy());
+        }
+
+        tempStage.add(clonedLayer);
+      }
+
+      tempStage.batchDraw();
+
+      // Generate data URL from temp stage
+      const dataUrl = tempStage.toDataURL({
+        pixelRatio,
+        mimeType,
+        quality,
+      });
+
+      // Clean up temp stage
+      tempStage.destroy();
+      document.body.removeChild(tempContainer);
+
+      /* =========================
+     PDF EXPORT - FIXED
+     ========================= */
+      if (options.format === "pdf") {
+        const { jsPDF } = await import("jspdf");
+
+        // Create image from data URL
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = dataUrl;
+        });
+
+        // Calculate PDF dimensions (A4 landscape)
+        const pdfWidth = 297; // mm
+        const pdfHeight = 210; // mm
+
+        // Calculate image aspect ratio
+        const imgRatio = img.width / img.height;
+
+        // Scale image to fit PDF
+        let imgWidth = pdfWidth - 20; // 10mm margins
+        let imgHeight = imgWidth / imgRatio;
+
+        // Adjust if too tall
+        if (imgHeight > pdfHeight - 20) {
+          imgHeight = pdfHeight - 20;
+          imgWidth = imgHeight * imgRatio;
+        }
+
+        // Center image
+        const xOffset = (pdfWidth - imgWidth) / 2;
+        const yOffset = (pdfHeight - imgHeight) / 2;
+
+        const pdf = new jsPDF({
+          orientation: "landscape",
+          unit: "mm",
+          format: "a4",
+        });
+
+        // Set PDF background color (convert hex to RGB)
+        if (backgroundFill !== "rgba(0,0,0,0)") {
+          const rgb = hexToRgb(backgroundFill);
+          if (rgb) {
+            pdf.setFillColor(rgb.r, rgb.g, rgb.b);
+            pdf.rect(0, 0, pdfWidth, pdfHeight, "F");
+          }
+        }
+
+        pdf.addImage(dataUrl, "PNG", xOffset, yOffset, imgWidth, imgHeight);
+
+        const pdfName = options.filename
+          ? `${options.filename}.pdf`
+          : `diagram-${Date.now()}.pdf`;
+
+        pdf.save(pdfName);
+      } else {
+        /* =========================
+       PNG / JPG EXPORT
+       ========================= */
+        const extension = options.format === "jpg" ? ".jpg" : ".png";
+        const filename = options.filename
+          ? `${options.filename}${extension}`
+          : `diagram-${Date.now()}${extension}`;
+
+        const link = document.createElement("a");
+        link.download = filename;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(dataUrl);
+        }, 100);
+      }
+
       setShowExportModal(false);
     } catch (error) {
       console.error("Export failed:", error);
       alert(`Export failed: ${(error as Error).message}`);
     } finally {
-      // Always restore original grid state for image exports
-      if (options.format !== "export") {
-        setShowGrid(originalShowGrid);
-      }
+      // Restore grid state
+      setShowGrid(originalShowGrid);
       setIsExporting(false);
     }
+  };
+
+  // Helper function to convert hex to RGB
+  const hexToRgb = (hex: string) => {
+    // Remove # if present
+    hex = hex.replace("#", "");
+
+    // Parse hex values
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    return { r, g, b };
   };
 
   // Handle save changes to localStorage
@@ -1163,10 +1350,10 @@ export default function Editor() {
           setTempConnection((prev: any) =>
             prev
               ? {
-                ...prev,
-                currentX: pointer.x,
-                currentY: pointer.y,
-              }
+                  ...prev,
+                  currentX: pointer.x,
+                  currentY: pointer.y,
+                }
               : null,
           );
         }
@@ -1566,12 +1753,12 @@ export default function Editor() {
                     setTempConnection((prev: any) =>
                       prev
                         ? {
-                          ...prev,
-                          waypoints: [
-                            ...prev.waypoints,
-                            { x: pointer.x, y: pointer.y },
-                          ],
-                        }
+                            ...prev,
+                            waypoints: [
+                              ...prev.waypoints,
+                              { x: pointer.x, y: pointer.y },
+                            ],
+                          }
                         : prev,
                     );
                   }
