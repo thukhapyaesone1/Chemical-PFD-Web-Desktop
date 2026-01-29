@@ -65,6 +65,13 @@ class ComponentListView(generics.ListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
+        queryset = queryset.filter(
+            svg__isnull=False,
+            png__isnull=False,
+        ).exclude(
+            svg='',
+            png='',
+        )
         serializer = self.get_serializer(queryset, many=True)
         return Response({"components": serializer.data}, status=status.HTTP_200_OK)
 
@@ -261,7 +268,7 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
             "items": canvas_items_data,
             "connections": connection_data,
             "sequence_counter": canvas_items.last().sequence + 1 if canvas_items.exists() else 0
-        } 
+        }
         return Response(response_data, status=status.HTTP_200_OK)
 
 
