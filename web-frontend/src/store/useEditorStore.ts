@@ -41,7 +41,7 @@ interface EditorStore {
   // --- ITEM OPS ---
   addItem: (
     editorId: string,
-    component: Omit<ComponentItem, "id">,
+    component: ComponentItem,
     opts?: Partial<
       Pick<CanvasItem, "x" | "y" | "width" | "height" | "rotation">
     >,
@@ -239,6 +239,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     const newItem: CanvasItem = {
       id,
+      component_id: component.id,
       name: component.name,
       icon: component.icon || "",
       svg: component.svg || "",
@@ -586,55 +587,3 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return JSON.parse(JSON.stringify(data));
   },
 }));
-// In @/utils/projectStorage.ts, update the convertToBackendFormat function:
-
-/**
- * Convert zustand CanvasState to backend format
- * This helper maps the local editor state to backend-compatible format
- */
-export function convertToBackendFormat(
-  projectId: number,
-  localItems: any[],
-  localConnections: any[],
-  sequenceCounter: number
-): CanvasState {
-  const items: BackendCanvasItem[] = localItems.map((item, index) => ({
-    id: item.id,
-    project: projectId,
-    component_id: item.id || index + 1, // CRITICAL: Add this line - use item.id or generate one
-    label: item.label || '',
-    x: item.x || 0,
-    y: item.y || 0,
-    width: item.width || 80,
-    height: item.height || 40,
-    rotation: item.rotation || 0,
-    scaleX: item.scaleX || 1,
-    scaleY: item.scaleY || 1,
-    sequence: item.sequence || index,
-    // Include component metadata
-    s_no: item.s_no || item.objectKey || '',
-    parent: item.parent || item.class || '',
-    name: item.name || '',
-    svg: item.svg || null,
-    png: item.png || null,
-    object: item.object || '',
-    legend: item.legend || '',
-    suffix: item.suffix || '',
-    grips: item.grips || [],
-  }));
-
-  const connections: BackendConnection[] = localConnections.map(conn => ({
-    id: conn.id,
-    sourceItemId: conn.sourceItemId,
-    sourceGripIndex: conn.sourceGripIndex,
-    targetItemId: conn.targetItemId,
-    targetGripIndex: conn.targetGripIndex,
-    waypoints: conn.waypoints || [],
-  }));
-
-  return {
-    items,
-    connections,
-    sequence_counter: sequenceCounter,
-  };
-}

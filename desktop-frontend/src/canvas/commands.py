@@ -3,11 +3,11 @@ File operation and Undo/Redo commands for canvas.
 """
 import os
 from PyQt5.QtWidgets import QUndoCommand, QMessageBox, QFileDialog
-from src.canvas.export import (
-    save_to_pfd, load_from_pfd, 
+from src.canvas.export import ( load_from_pfd, 
     export_to_image, export_to_pdf, generate_report_pdf,
-    export_to_excel
+    export_to_excel, save_canvas_state
 )
+from src.api_client import delete_project
 
 # ---------------------- UNDO COMMANDS ----------------------
 
@@ -104,20 +104,18 @@ class MoveCommand(QUndoCommand):
 
 # ---------------------- FILE OPERATIONS ----------------------
 def save_project(canvas, filename):
-    """Saves project and updates canvas state."""
+    """Saves project - ONLY for legacy .pfd files."""
+    from src.canvas.export import save_to_pfd
     save_to_pfd(canvas, filename)
     canvas.file_path = filename
     canvas.undo_stack.setClean()
-    # Force UI update and state sync
-    canvas.set_modified(True)
+
 
 def open_project(canvas, filename):
-    """Opens project and updates canvas state."""
+    """Opens project from .pfd file."""
     if load_from_pfd(canvas, filename):
         canvas.file_path = filename
         canvas.undo_stack.clear()
-        # Force UI update and state sync
-        canvas.set_modified(True)
         return True
     return False
 
@@ -132,10 +130,27 @@ def handle_close_event(canvas, event):
         )
 
         if reply == QMessageBox.Save:
-            if canvas.file_path:
+            # Try to save to backend if project_id exists
+            if hasattr(canvas, 'project_id') and canvas.project_id:
+                import src.app_state as app_state
+                app_state.current_project_id = canvas.project_id
+                app_state.current_project_name = canvas.project_name
+                
+                result = save_canvas_state(canvas)
+                if result:
+                    # Update flag on success
+                    if hasattr(canvas, 'is_new_project'):
+                        canvas.is_new_project = False
+                    event.accept()
+                else:
+                    QMessageBox.critical(canvas, "Error", "Failed to save project.")
+                    event.ignore()
+            # Otherwise save to file
+            elif canvas.file_path:
                 save_project(canvas, canvas.file_path)
                 event.accept()
             else:
+                # Ask for filename
                 options = QFileDialog.Options()
                 filename, _ = QFileDialog.getSaveFileName(
                     canvas, "Save Project", "", 
@@ -149,13 +164,24 @@ def handle_close_event(canvas, event):
                     event.accept()
                 else:
                     event.ignore()
+                    
         elif reply == QMessageBox.Discard:
+            # Delete if it was a new unsaved project ---
+            if hasattr(canvas, 'is_new_project') and canvas.is_new_project and canvas.project_id:
+                print(f"[CLOSE] Discarding new project {canvas.project_id}. Deleting from backend...")
+                delete_project(canvas.project_id)
             event.accept()
         else:
             event.ignore()
     else:
-        # No changes, close immediately
+        # If it wasn't modified, but it's NEW (empty/fresh), we might also want to delete it?
+        # Usually, if you open a new project and close it immediately without touching it (is_modified=False),
+        # you probably don't want to keep that empty project ID.
+        if hasattr(canvas, 'is_new_project') and canvas.is_new_project and canvas.project_id:
+             print(f"[CLOSE] Discarding empty/untouched new project {canvas.project_id}.")
+             delete_project(canvas.project_id)
         event.accept()
+
 def export_image(canvas, filename):
     export_to_image(canvas, filename)
 

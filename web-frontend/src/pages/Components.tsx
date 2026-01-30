@@ -21,7 +21,7 @@ import { useComponents } from "@/context/ComponentContext";
 import { ComponentItem, Grip } from "@/components/Canvas/types";
 
 export default function Components() {
-  const { components, addComponent, updateComponent, deleteComponent } =
+  const { components, addComponent, updateComponent, deleteComponent, isLoading, error } =
     useComponents();
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
@@ -194,19 +194,24 @@ export default function Components() {
     onOpen();
   };
 
-  const handleDelete = (onClose: () => void) => {
+  const handleDelete = async (onClose: () => void) => {
     if (!editingComponent) return;
     if (
       window.confirm(
         `Are you sure you want to delete "${editingComponent.name}"? This cannot be undone.`,
       )
     ) {
-      deleteComponent(editingComponent.category, editingComponent.name);
-      onClose();
+      try {
+        await deleteComponent(editingComponent.category, editingComponent.name);
+        alert("Component deleted successfully!");
+        onClose();
+      } catch (err: any) {
+        alert(`Error: ${err.message || "Failed to delete component"}`);
+      }
     }
   };
 
-  const handleSubmit = (onClose: () => void) => {
+  const handleSubmit = async (onClose: () => void) => {
     if (!name || (!category && !newCategory)) return;
 
     const finalCategory = newCategory || category;
@@ -220,6 +225,7 @@ export default function Components() {
 
     // Construct new component object as per requirements
     const newComponent: ComponentItem = {
+      id: 0,
       name,
       icon: iconFile || "",
       svg: svgFile || iconFile || "", // Fallback to icon if SVG not provided
@@ -227,33 +233,38 @@ export default function Components() {
       object: name.replace(/\s+/g, ""),
       args: [],
       grips: cleanGrips,
-      isCustom: true,
       legend,
       suffix,
     };
 
-    if (editingComponent) {
-      updateComponent(
-        editingComponent.category,
-        editingComponent.name,
-        finalCategory,
-        newComponent,
-      );
-    } else {
-      addComponent(finalCategory, newComponent);
-    }
+    try {
+      if (editingComponent) {
+        await updateComponent(
+          editingComponent.category,
+          editingComponent.name,
+          finalCategory,
+          newComponent,
+        );
+        alert("Component updated successfully!");
+      } else {
+        await addComponent(finalCategory, newComponent);
+        alert("Component created successfully!");
+      }
 
-    // Reset form
-    setName("");
-    setCategory("");
-    setNewCategory("");
-    setIconFile(null);
-    setSvgFile(null);
-    setLegend("");
-    setSuffix("");
-    setGrips([]);
-    setEditingComponent(null);
-    onClose();
+      // Reset form
+      setName("");
+      setCategory("");
+      setNewCategory("");
+      setIconFile(null);
+      setSvgFile(null);
+      setLegend("");
+      setSuffix("");
+      setGrips([]);
+      setEditingComponent(null);
+      onClose();
+    } catch (err: any) {
+      alert(`Error: ${err.message || "Failed to save component"}`);
+    }
   };
 
   const categories = Object.keys(components);
@@ -275,62 +286,80 @@ export default function Components() {
       </div>
 
       <div className="space-y-8">
-        {Object.entries(components).map(([catName, items]) => (
-          <div key={catName}>
-            <h2 className="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-300 border-b pb-2 border-gray-200 dark:border-gray-700">
-              {catName}
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {Object.values(items).map((item) => (
-                <Tooltip
-                  key={item.name}
-                  content={
-                    <div className="text-xs">
-                      <div className="font-bold">{item.name}</div>
-                    </div>
-                  }
-                >
-                  <Card
-                    isPressable
-                    className="border-none bg-white dark:bg-gray-800 shadow-sm hover:shadow-md group relative"
+        {isLoading ? (
+          <div className="flex justify-center items-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          </div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <p className="text-red-500 dark:text-red-400 mb-4">{error}</p>
+            <Button color="primary" onPress={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
+        ) : Object.keys(components).length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-gray-500 dark:text-gray-400 mb-4">
+              No components yet. Click "Add Component" to create your first component.
+            </p>
+          </div>
+        ) : (
+          Object.entries(components).map(([catName, items]) => (
+            <div key={catName}>
+              <h2 className="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-300 border-b pb-2 border-gray-200 dark:border-gray-700">
+                {catName}
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {Object.values(items).map((item) => (
+                  <Tooltip
+                    key={item.name}
+                    content={
+                      <div className="text-xs">
+                        <div className="font-bold">{item.name}</div>
+                      </div>
+                    }
                   >
-                    <CardBody className="p-4 flex items-center justify-center bg-gray-50/50 dark:bg-gray-900/50">
-                      <div className="w-16 h-16 flex items-center justify-center">
-                        <Image
-                          src={
-                            typeof item.icon === "string"
-                              ? item.icon
-                              : (item.icon as any)?.src || item.icon
-                          } // Handle imported image module vs string
-                          alt={item.name}
-                          className="max-w-full max-h-full object-contain"
-                          radius="none"
-                        />
-                      </div>
-                    </CardBody>
-                    <CardFooter className="justify-between">
-                      <div className="text-small font-medium truncate w-full text-center text-gray-700 dark:text-gray-300">
-                        {item.name}
-                      </div>
-                      {item.isCustom && (
+                    <Card
+                      className="border-none bg-white dark:bg-gray-800 shadow-sm hover:shadow-md group relative"
+                    >
+                      <CardBody className="p-4 flex items-center justify-center bg-gray-50/50 dark:bg-gray-900/50">
+                        <div className="w-16 h-16 flex items-center justify-center">
+                          <Image
+                            src={
+                              typeof item.icon === "string"
+                                ? item.icon
+                                : (item.icon as any)?.src || item.icon
+                            } // Handle imported image module vs string
+                            alt={item.name}
+                            className="max-w-full max-h-full object-contain"
+                            radius="none"
+                          />
+                        </div>
+                      </CardBody>
+                      <CardFooter className="justify-between">
+                        <div className="text-small font-medium truncate w-full text-center text-gray-700 dark:text-gray-300">
+                          {item.name}
+                        </div>
                         <Button
                           isIconOnly
                           aria-label="Edit"
-                          className="absolute top-1 right-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity bg-white/50 backdrop-blur-sm z-10"
+                          className="absolute top-1 right-1 opacity-100 group-hover:opacity-100 transition-opacity bg-white/50 backdrop-blur-sm z-20"
                           size="sm"
                           variant="light"
-                          onPress={() => handleEdit(catName, item)}
+                          onPress={() => {
+                            handleEdit(catName, item);
+                          }}
                         >
                           <span className="text-lg">✎</span>
                         </Button>
-                      )}
-                    </CardFooter>
-                  </Card>
-                </Tooltip>
-              ))}
+                      </CardFooter>
+                    </Card>
+                  </Tooltip>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Add Component Modal */}

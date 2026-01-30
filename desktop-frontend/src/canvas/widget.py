@@ -36,10 +36,17 @@ class CanvasWidget(QWidget):
         self.components = []
         self.connections = []
         self.active_connection = None
+
+        # PROJECT TRACKING
+        self.project_id = None
+        self.project_name = None
+
+        # Tracks if this is a fresh, unsaved project ---
+        self.is_new_project = False
         
         self.file_path = None
         self.is_modified = False
-        self.undo_stack.cleanChanged.connect(self.set_modified)
+        self.undo_stack.cleanChanged.connect(self.on_undo_stack_changed)
 
         # Configs
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -73,9 +80,6 @@ class CanvasWidget(QWidget):
         if expanded:
             self.logical_size = QSize(int(new_w), int(new_h))
             self.apply_zoom() # Re-applies size with zoom
-
-        
-
 
     def apply_zoom(self):
         """Apply the current zoom level to the canvas size and all components."""
@@ -533,26 +537,65 @@ class CanvasWidget(QWidget):
         export_excel(self, filename)
 
     # ---------------------- FILE MANAGEMENT ----------------------
-    def set_modified(self, clean):
-        """Called when undo stack clean state changes."""
+    def on_undo_stack_changed(self, clean):
+        """
+        Called when undo stack clean state changes.
+        MANUAL SAVE MODE: Only updates the UI ('*') and is_modified flag.
+        Does NOT auto-save to backend.
+        """
+        print(f"[DEBUG] Stack changed: clean={clean}, project_id={self.project_id}")
         self.is_modified = not clean
-        # Update window title if possible
-        if self.parent() and hasattr(self.parent(), "setWindowTitle"):
-            title = self.parent().windowTitle()
-            if not clean:
-                if not title.endswith("*"):
-                    self.parent().setWindowTitle(title + "*")
-            else:
-                if title.endswith("*"):
-                    self.parent().setWindowTitle(title[:-1])
-
-    def save_file(self, filename):
-        from src.canvas.commands import save_project
-        save_project(self, filename)
         
+        # Update window title to show/hide asterisk
+        parent = self.parent()
+        while parent and not isinstance(parent, QtWidgets.QMdiSubWindow):
+            parent = parent.parent()
+        
+        if parent and hasattr(parent, "setWindowTitle"):
+            title = parent.windowTitle()
+            # Clean up any existing asterisk first to prevent double **
+            base_title = title.rstrip("*")
+            
+            if not clean:
+                parent.setWindowTitle(base_title + "*")
+            else:
+                parent.setWindowTitle(base_title)
+
+    def save_file(self, filename=None):
+        """
+        Save canvas to backend. 
+        If filename is provided, it's for local PFD export (legacy support).
+        """
+        if self.project_id:
+            # Save to backend
+            from src.canvas.export import save_canvas_state
+            import src.app_state as app_state
+            
+            app_state.current_project_id = self.project_id
+            app_state.current_project_name = self.project_name
+            
+            result = save_canvas_state(self)
+            if result:
+                self.undo_stack.setClean()
+                # Mark as "Not New" (Permanent) ---
+                self.is_new_project = False
+                print(f"[CANVAS] Saved project {self.project_id} to backend")
+            return result
+        elif filename:
+            # Legacy: Save to local PFD file
+            from src.canvas.export import save_to_pfd
+            save_to_pfd(self, filename)
+            self.file_path = filename
+            self.undo_stack.setClean()
+            return True
+        else:
+            print("[CANVAS] No project ID or filename for save")
+            return False     
+           
     def open_file(self, filename):
-        from src.canvas.commands import open_project
-        return open_project(self, filename)
+        """Open local PFD file (legacy support)."""
+        from src.canvas.export import load_from_pfd
+        return load_from_pfd(self, filename)
 
     def closeEvent(self, event):
         from src.canvas.commands import handle_close_event

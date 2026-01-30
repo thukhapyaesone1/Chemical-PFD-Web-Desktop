@@ -8,7 +8,9 @@ from PyQt5.QtGui import QFont
 from src.theme import apply_theme_to_screen
 from src.theme_manager import theme_manager
 from src.navigation import slide_to_index
-
+from src import api_client
+from datetime import datetime
+import src.app_state as app_state
 
 # Action Card
 class ActionCard(QFrame):
@@ -56,13 +58,14 @@ class ActionCard(QFrame):
 # Recent Project Item
 class RecentProjectItem(QWidget):
     """A row item showing a recent project."""
-    clicked = pyqtSignal(str)
+    clicked = pyqtSignal(int)  # Changed to emit project ID instead of name
 
-    def __init__(self, project_name, last_opened, parent=None):
+    def __init__(self, project_id, project_name, last_opened, parent=None):
         super().__init__(parent)
 
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setCursor(Qt.PointingHandCursor)
+        self.project_id = project_id
         self.project_name = project_name
 
         layout = QHBoxLayout(self)
@@ -96,7 +99,7 @@ class RecentProjectItem(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.clicked.emit(self.project_name)
+            self.clicked.emit(self.project_id)  # Emit ID instead of name
         super().mousePressEvent(event)
 
 
@@ -183,29 +186,31 @@ class LandingPage(QWidget):
         recent_header.setObjectName("sectionHeader")
         center_layout.addWidget(recent_header)
 
-        recent_container = QFrame()
-        recent_container.setObjectName("recentContainer")
-        recent_layout = QVBoxLayout(recent_container)
-        recent_layout.setContentsMargins(0, 0, 0, 0)
-        recent_layout.setSpacing(0)
+        self.recent_container = QFrame()
+        self.recent_container.setObjectName("recentContainer")
+        self.recent_layout = QVBoxLayout(self.recent_container)
+        self.recent_layout.setContentsMargins(0, 0, 0, 0)
+        self.recent_layout.setSpacing(0)
+        center_layout.addWidget(self.recent_container)
 
-        placeholder_projects = [
-            ("Distillation_Unit_A.pfd", "2 hours ago"),
-            ("Heat_Exchanger_Network.pfd", "Yesterday"),
-            ("Reactor_Setup_V2.pfd", "3 days ago")
-        ]
 
-        for name, time in placeholder_projects:
-            item = RecentProjectItem(name, time)
-            recent_layout.addWidget(item)
+        # placeholder_projects = [
+        #     ("Distillation_Unit_A.pfd", "2 hours ago"),
+        #     ("Heat_Exchanger_Network.pfd", "Yesterday"),
+        #     ("Reactor_Setup_V2.pfd", "3 days ago")
+        # ]
 
-            # Divider
-            line = QFrame()
-            line.setFrameShape(QFrame.HLine)
-            line.setObjectName("divider")
-            recent_layout.addWidget(line)
+        # for name, time in placeholder_projects:
+        #     item = RecentProjectItem(name, time)
+        #     recent_layout.addWidget(item)
 
-        center_layout.addWidget(recent_container)
+        #     # Divider
+        #     line = QFrame()
+        #     line.setFrameShape(QFrame.HLine)
+        #     line.setObjectName("divider")
+        #     recent_layout.addWidget(line)
+
+        # center_layout.addWidget(recent_container)
 
         # Center alignment
         h = QHBoxLayout()
@@ -225,6 +230,73 @@ class LandingPage(QWidget):
         # Logout
         self.logout_btn.clicked.connect(self.on_logout_clicked)
 
+    def showEvent(self, event):
+        """Called when the widget becomes visible (e.g. after login)."""
+        super().showEvent(event)
+        self.load_recent_projects()
+
+    def _format_time(self, iso_time: str) -> str:
+        try:
+            dt = datetime.fromisoformat(iso_time.replace("Z", ""))
+            delta = datetime.now() - dt
+
+            if delta.days == 0:
+                return "Today"
+            if delta.days == 1:
+                return "Yesterday"
+            return f"{delta.days} days ago"
+        except Exception:
+            return ""
+        
+    def load_recent_projects(self):
+        """Load recent projects from backend API."""
+        while self.recent_layout.count():
+            item = self.recent_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        projects = api_client.get_projects()
+        print(f"[DEBUG] Got {len(projects)} projects")
+        print(f"[DEBUG] First project: {projects[0] if projects else 'None'}")
+
+
+        if not projects:
+            empty = QLabel("No recent projects")
+            empty.setAlignment(Qt.AlignCenter)
+            empty.setObjectName("emptyRecent")
+            self.recent_layout.addWidget(empty)
+            return
+
+        # Sort by updated_at (most recent first)
+        projects.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+        
+        # Show only latest 5 projects
+        for proj in projects[:5]:
+            project_id = proj.get("id")
+            name = proj.get("name", "Untitled Project")
+            updated = proj.get("updated_at", "")
+            time_label = self._format_time(updated)
+
+            item = RecentProjectItem(project_id, name, time_label)
+            item.clicked.connect(self.on_recent_project_clicked)
+            self.recent_layout.addWidget(item)
+
+            divider = QFrame()
+            divider.setFrameShape(QFrame.HLine)
+            divider.setObjectName("divider")
+            self.recent_layout.addWidget(divider)
+
+    def on_recent_project_clicked(self, project_id: int):
+        """Handle click on recent project - navigate to canvas and load project."""
+        print(f"[DEBUG] Clicked project: {project_id}")
+        print(f"[DEBUG] Setting pending_project_id")
+        # Store project ID to load after navigation
+        app_state.pending_project_id = project_id
+        
+        # Navigate to canvas screen (index 4)
+        print(f"[DEBUG] Navigating to index 4")
+        slide_to_index(4, direction=1)
+
     def on_theme_changed(self, theme):
         """Called when theme changes from theme manager."""
         apply_theme_to_screen(self, theme)
@@ -236,8 +308,6 @@ class LandingPage(QWidget):
         super().changeEvent(event)
 
     def on_logout_clicked(self):
-        import src.app_state as app_state
-
         app_state.access_token = None
         app_state.refresh_token = None
         app_state.current_user = None

@@ -59,7 +59,11 @@ export default function Register() {
         <Divider className="my-2" />
 
         <CardBody>
-          <form className="flex flex-col gap-4" onSubmit={handleRegister}>
+          <form
+            aria-label="Create Account Form"
+            className="flex flex-col gap-4"
+            onSubmit={handleRegister}
+          >
             <Input
               isRequired
               label="Username"

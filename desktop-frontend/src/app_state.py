@@ -10,3 +10,12 @@ BACKEND_BASE_URL = "http://127.0.0.1:8000"   # change later for prod
 access_token = None
 refresh_token = None
 current_user = None
+
+# Project loading
+pending_project_id = None
+pending_project_data = None
+
+# project state
+current_project_id = None
+current_project_name = None
+project_created = False

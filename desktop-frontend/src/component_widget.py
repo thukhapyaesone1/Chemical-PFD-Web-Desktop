@@ -38,10 +38,27 @@ class ComponentWidget(QWidget):
         self.setMouseTracking(True)
 
     def get_content_rect(self):
-        bottom_pad = 25 if self.config.get('default_label') else 10
-        w = max(1, self.width() - 20)
-        h = max(1, self.height() - 10 - bottom_pad)
-        return QRectF(10, 10, w, h)
+        # Scale margins by zoom level to ensure linear scaling of geometry
+        zoom = 1.0
+        if self.parent() and hasattr(self.parent(), "zoom_level"):
+            zoom = self.parent().zoom_level
+            
+        # Base margins (Logical 1.0)
+        base_x = 10
+        base_y = 10
+        pad_right = 10
+        pad_bottom = 25 if self.config.get('default_label') else 10
+        
+        # Scaled values
+        m_x = base_x * zoom
+        m_y = base_y * zoom
+        p_r = pad_right * zoom
+        p_b = pad_bottom * zoom
+        
+        w = max(1, self.width() - m_x - p_r)
+        h = max(1, self.height() - m_y - p_b)
+        
+        return QRectF(m_x, m_y, w, h)
     
     def calculate_svg_rect(self, content_rect):
         """Calculate the actual rectangle where SVG will be rendered"""

@@ -75,6 +75,17 @@ type Shortcut = {
   requireCtrl?: boolean;
 };
 
+// Helper to resolve image URLs
+const resolveImageUrl = (url: string) => {
+  if (!url) return "";
+  // Check if it's a data URI or already absolute
+  if (url.startsWith("data:") || url.startsWith("http")) return url;
+  // If relative path (e.g. /media/...), prepend backend host
+  // Assuming backend is at localhost:8000 based on projectApi.ts
+  if (url.startsWith("/")) return `http://localhost:8000${url}`;
+  return url;
+};
+
 export default function Editor() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -112,71 +123,6 @@ export default function Editor() {
     return editorStore.getEditorState(projectId);
   }, [projectId, editorStore]);
 
-  // Initialize editor when projectId changes and load from localStorage
-  // useEffect(() => {
-  //   if (!projectId) return;
-
-  //   // Try to load project from localStorage
-  //   const savedProject = getProject(Number(projectId));
-
-  //   if (savedProject) {
-  //     // Load project metadata
-  //     setProjectMetadata({
-  //       name: savedProject.name,
-  //       description: savedProject.description,
-  //     });
-
-  //     // Hydrate editor with saved canvas state
-  //     // Convert BackendCanvasItem to CanvasItem format
-  //     const canvasItems = savedProject.canvas_state.items.map(item => ({
-  //       id: item.id,
-  //       name: item.name || item.object || 'Component',
-  //       icon: item.png || item.svg || '',
-  //       svg: item.svg || '',
-  //       class: item.object || '',
-  //       object: item.object || '',
-  //       args: [],
-  //       addedAt: Date.now(),
-  //       x: item.x,
-  //       y: item.y,
-  //       width: item.width,
-  //       height: item.height,
-  //       rotation: item.rotation,
-  //       scaleX: item.scaleX,
-  //       scaleY: item.scaleY,
-  //       sequence: item.sequence,
-  //       label: item.label,
-  //       grips: item.grips,
-  //       legend: item.legend,
-  //       suffix: item.suffix,
-  //       png: item.png,
-  //     } as any));
-
-  //     editorStore.hydrateEditor(projectId, {
-  //       items: canvasItems,
-  //       connections: savedProject.canvas_state.connections,
-  //       counts: {}, // Will be recalculated
-  //       sequenceCounter: savedProject.canvas_state.sequence_counter,
-  //     });
-
-  //     // Restore viewport settings if available
-  //     if (savedProject.viewport) {
-  //       setStageScale(savedProject.viewport.scale);
-  //       setStagePos(savedProject.viewport.position);
-  //       setGridSize(savedProject.viewport.gridSize);
-  //       setShowGrid(savedProject.viewport.showGrid);
-  //       setSnapToGrid(savedProject.viewport.snapToGrid);
-  //     }
-  //   } else {
-  //     // New project, just initialize
-  //     editorStore.initEditor(projectId);
-  //     setProjectMetadata({
-  //       name: `Project ${projectId}`,
-  //       description: null,
-  //     });
-  //   }
-  //   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // }, [projectId]); // Only depend on projectId, not editorStore
   useEffect(() => {
     if (!projectId) return;
 
@@ -210,6 +156,8 @@ export default function Editor() {
               item.object ||
               item.name ||
               (item.component ? item.component.name : "");
+            const rawSvg = item.svg || "";
+            const rawPng = item.png || "";
 
             return {
               id: item.id,
@@ -218,8 +166,8 @@ export default function Editor() {
                 (item.component && item.component.name) ||
                 objectKey ||
                 "Component",
-              icon: item.png || "",
-              svg: item.svg || "",
+              icon: resolveImageUrl(rawPng || rawSvg),
+              svg: resolveImageUrl(rawSvg),
               class: item.object || item.class || "",
               object:
                 item.object || (item.component && item.component.name) || "",
@@ -237,7 +185,8 @@ export default function Editor() {
               grips: item.grips ?? [],
               legend: item.legend ?? "",
               suffix: item.suffix ?? "",
-              png: item.png ?? "",
+              png: resolveImageUrl(rawPng),
+              component_id: item.component_id, // Ensure this is preserved
               objectKey,
             } as any;
           });
@@ -426,104 +375,291 @@ export default function Editor() {
       event.target.value = ""; // Reset file input
     }
   };
+  const waitForKonvaImages = async (stage: Konva.Stage) => {
+    const imageNodes = stage.find("Image") as Konva.Image[];
+
+    await Promise.all(
+      imageNodes.map(
+        (node) =>
+          new Promise<void>((resolve) => {
+            const img = node.image();
+
+            if (!img) {
+              resolve();
+              return;
+            }
+
+            // Already loaded
+            if (img.complete && img.naturalWidth > 0) {
+              resolve();
+              return;
+            }
+
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          }),
+      ),
+    );
+  };
+
   // In your Editor.tsx handleExport function:
+
   const handleExport = async (options: ExportOptions) => {
     if (!projectId || !currentState) {
       alert("No project loaded");
-
       return;
     }
 
     setIsExporting(true);
-
-    // Save current grid state for image exports
     const originalShowGrid = showGrid;
 
     try {
+      /* =========================
+     DIAGRAM FILE EXPORT (.pfd)
+     ========================= */
       if (options.format === "export") {
-        // Custom diagram file export
         const exportData = createExportData(
           currentState,
           {
             scale: stageScale,
             position: stagePos,
-            gridSize: gridSize,
-            showGrid: showGrid,
-            snapToGrid: snapToGrid,
+            gridSize,
+            showGrid,
+            snapToGrid,
           },
           projectId,
           `Diagram ${projectId}`,
         );
 
-        // Use the filename from options or generate default
         const fileName = options.filename
           ? `${options.filename}.pfd`
           : `diagram-${projectId}.pfd`;
 
         exportToDiagramFile(exportData, fileName);
         setShowExportModal(false);
-
         return;
       }
 
-      // Original image export code
+      /* =========================
+     IMAGE / PDF EXPORT
+     ========================= */
       if (!stageRef.current) {
-        throw new Error("Stage not available");
+        throw new Error("Canvas not ready");
       }
 
-      // Temporarily update grid visibility for image exports
+      // Apply grid option
       if (options.includeGrid !== undefined) {
         setShowGrid(options.includeGrid);
       }
 
-      // Force a re-render to update the canvas
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Let React re-render
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Use the updated exportDiagram function with connections
-      const result = await exportDiagram(stageRef.current, droppedItems, {
-        ...options,
-        connections: connections,
-      });
+      const stage = stageRef.current;
 
-      // Use the filename from options with correct extension
-      let filename: string;
+      // Force draw
+      stage.batchDraw();
 
-      if (options.filename) {
-        // Ensure correct extension based on format
-        const extension =
-          options.format === "pdf"
-            ? ".pdf"
-            : options.format === "jpg"
-              ? ".jpg"
-              : ".png";
+      // WAIT FOR ALL IMAGES TO LOAD
+      await waitForKonvaImages(stage);
 
-        // Check if filename already has extension
-        const hasCorrectExtension = options.filename
-          .toLowerCase()
-          .endsWith(extension);
+      // Extra frame for safety
+      await new Promise((resolve) => requestAnimationFrame(resolve));
 
-        filename = hasCorrectExtension
-          ? options.filename
-          : `${options.filename}${extension}`;
-      } else {
-        // Default filename
-        const timestamp = new Date().toISOString().split("T")[0];
+      /* =========================
+     DETERMINE BACKGROUND COLOR
+     ========================= */
+      // Get the actual stage background color
+      const isDarkMode = document.documentElement.classList.contains("dark");
+      const defaultBackground = isDarkMode ? "#1f2937" : "#ffffff";
 
-        filename = `diagram-${timestamp}.${options.format}`;
+      let backgroundFill = options.backgroundColor || defaultBackground;
+
+      // Handle transparent background
+      if (backgroundFill === "transparent") {
+        backgroundFill = "rgba(0,0,0,0)";
       }
 
-      downloadBlob(result as Blob, filename);
+      console.log("Export settings:", {
+        background: backgroundFill,
+        isDarkMode,
+        format: options.format,
+        scale: options.scale,
+        quality: options.quality,
+      });
+
+      /* =========================
+     EXPORT TO DATA URL
+     ========================= */
+      const pixelRatio = options.scale ?? 2;
+      const mimeType = options.format === "jpg" ? "image/jpeg" : "image/png";
+      const quality =
+        options.quality === "low"
+          ? 0.7
+          : options.quality === "medium"
+            ? 0.85
+            : 1;
+
+      // IMPORTANT: Create a temporary stage clone with fixed background
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "absolute";
+      tempContainer.style.left = "-9999px";
+      tempContainer.style.top = "-9999px";
+      tempContainer.style.width = `${stage.width()}px`;
+      tempContainer.style.height = `${stage.height()}px`;
+      document.body.appendChild(tempContainer);
+
+      const tempStage = new Konva.Stage({
+        container: tempContainer,
+        width: stage.width(),
+        height: stage.height(),
+      });
+
+      // Add background layer first
+      if (backgroundFill !== "rgba(0,0,0,0)") {
+        const bgLayer = new Konva.Layer();
+        const bgRect = new Konva.Rect({
+          x: 0,
+          y: 0,
+          width: stage.width(),
+          height: stage.height(),
+          fill: backgroundFill,
+        });
+        bgLayer.add(bgRect);
+        tempStage.add(bgLayer);
+      }
+
+      // Clone the main layer (skip grid if not needed)
+      const originalLayer = stage.findOne("Layer");
+      if (originalLayer) {
+        const clonedLayer = originalLayer.clone({
+          listening: false,
+        });
+
+        // Remove grid if not included
+        if (!options.includeGrid) {
+          clonedLayer
+            .find(".grid-line, .grid-shape")
+            .forEach((node) => node.destroy());
+        }
+
+        tempStage.add(clonedLayer);
+      }
+
+      tempStage.batchDraw();
+
+      // Generate data URL from temp stage
+      const dataUrl = tempStage.toDataURL({
+        pixelRatio,
+        mimeType,
+        quality,
+      });
+
+      // Clean up temp stage
+      tempStage.destroy();
+      document.body.removeChild(tempContainer);
+
+      /* =========================
+     PDF EXPORT - FIXED
+     ========================= */
+      if (options.format === "pdf") {
+        const { jsPDF } = await import("jspdf");
+
+        // Create image from data URL
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = dataUrl;
+        });
+
+        // Calculate PDF dimensions (A4 landscape)
+        const pdfWidth = 297; // mm
+        const pdfHeight = 210; // mm
+
+        // Calculate image aspect ratio
+        const imgRatio = img.width / img.height;
+
+        // Scale image to fit PDF
+        let imgWidth = pdfWidth - 20; // 10mm margins
+        let imgHeight = imgWidth / imgRatio;
+
+        // Adjust if too tall
+        if (imgHeight > pdfHeight - 20) {
+          imgHeight = pdfHeight - 20;
+          imgWidth = imgHeight * imgRatio;
+        }
+
+        // Center image
+        const xOffset = (pdfWidth - imgWidth) / 2;
+        const yOffset = (pdfHeight - imgHeight) / 2;
+
+        const pdf = new jsPDF({
+          orientation: "landscape",
+          unit: "mm",
+          format: "a4",
+        });
+
+        // Set PDF background color (convert hex to RGB)
+        if (backgroundFill !== "rgba(0,0,0,0)") {
+          const rgb = hexToRgb(backgroundFill);
+          if (rgb) {
+            pdf.setFillColor(rgb.r, rgb.g, rgb.b);
+            pdf.rect(0, 0, pdfWidth, pdfHeight, "F");
+          }
+        }
+
+        pdf.addImage(dataUrl, "PNG", xOffset, yOffset, imgWidth, imgHeight);
+
+        const pdfName = options.filename
+          ? `${options.filename}.pdf`
+          : `diagram-${Date.now()}.pdf`;
+
+        pdf.save(pdfName);
+      } else {
+        /* =========================
+       PNG / JPG EXPORT
+       ========================= */
+        const extension = options.format === "jpg" ? ".jpg" : ".png";
+        const filename = options.filename
+          ? `${options.filename}${extension}`
+          : `diagram-${Date.now()}${extension}`;
+
+        const link = document.createElement("a");
+        link.download = filename;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(dataUrl);
+        }, 100);
+      }
+
       setShowExportModal(false);
     } catch (error) {
       console.error("Export failed:", error);
       alert(`Export failed: ${(error as Error).message}`);
     } finally {
-      // Always restore original grid state for image exports
-      if (options.format !== "export") {
-        setShowGrid(originalShowGrid);
-      }
+      // Restore grid state
+      setShowGrid(originalShowGrid);
       setIsExporting(false);
     }
+  };
+
+  // Helper function to convert hex to RGB
+  const hexToRgb = (hex: string) => {
+    // Remove # if present
+    hex = hex.replace("#", "");
+
+    // Parse hex values
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    return { r, g, b };
   };
 
   // Handle save changes to localStorage
@@ -588,82 +724,6 @@ export default function Editor() {
   // Initialize lastSavedState only on first load
   useEffect(() => {
     if (!currentState || lastSavedState) return;
-
-    const handleSaveChanges = async () => {
-      if (!projectId || !currentState || !projectMetadata) {
-        alert("No project loaded");
-
-        return;
-      }
-
-      try {
-        // Convert editor state → backend format
-        const canvasState = convertToBackendFormat(
-          Number(projectId),
-          currentState.items,
-          currentState.connections,
-          currentState.sequenceCounter || 0,
-        );
-
-        // 🔒 TEMP SAFE FIX — FILTER INVALID ITEMS
-        const safeItems = (canvasState.items || []).filter(
-          (item: any) =>
-            typeof item.component_id === "number" && item.component_id > 0,
-        );
-
-        if (safeItems.length !== canvasState.items.length) {
-          console.warn(
-            "Dropped invalid canvas items before save:",
-            canvasState.items.filter(
-              (i: any) => !i.component_id || i.component_id <= 0,
-            ),
-          );
-        }
-
-        const safeCanvasState = {
-          ...canvasState,
-          items: safeItems,
-        };
-
-        // Prepare payload
-        const payload = {
-          name: projectMetadata.name,
-          description: projectMetadata.description,
-          canvas_state: safeCanvasState,
-          viewport: {
-            scale: stageScale,
-            position: stagePos,
-            gridSize,
-            showGrid,
-            snapToGrid,
-          },
-        };
-
-        // PUT to backend
-        const updated = await saveProjectCanvas(Number(projectId), payload);
-
-        // Update local save tracking
-        const savedStateStr = JSON.stringify({
-          items: currentState.items,
-          connections: currentState.connections,
-        });
-
-        setLastSavedState(savedStateStr);
-        setHasUnsavedChanges(false);
-
-        if (updated && updated.name) {
-          setProjectMetadata({
-            name: updated.name,
-            description: updated.description ?? null,
-          });
-        }
-
-        alert(`Project "${projectMetadata.name}" saved successfully!`);
-      } catch (error) {
-        console.error("Save failed:", error);
-        alert(`Save failed: ${(error as Error).message}`);
-      }
-    };
 
     // Initialize on first load only (when lastSavedState is null)
     const currentStateStr = JSON.stringify({
@@ -765,7 +825,7 @@ export default function Editor() {
   }, [showExportModal]);
 
   // --- State ---
-  const { components } = useComponents();
+  const { components, isLoading, error } = useComponents();
   const handleZoomIn = () => {
     setStageScale((prev) => Math.min(3, prev + 0.1));
   };
@@ -829,6 +889,7 @@ export default function Editor() {
     Set<number>
   >(new Set());
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
 
   // Connection drawing state
   const [isDrawingConnection, setIsDrawingConnection] = useState(false);
@@ -1572,8 +1633,12 @@ export default function Editor() {
             <ComponentLibrarySidebar
               components={components}
               initialSearchQuery={searchQuery}
+              selectedCategory={selectedCategory}
+              isLoading={isLoading}
+              error={error}
+              onCategoryChange={(cat) => setSelectedCategory(cat)}
               onDragStart={handleDragStart}
-              onSearch={setSearchQuery}
+              onSearch={(q) => setSearchQuery(q)}
             />
           )}
         </div>

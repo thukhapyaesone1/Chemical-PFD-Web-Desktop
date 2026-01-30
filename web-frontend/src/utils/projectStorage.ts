@@ -179,6 +179,7 @@ export function convertToBackendFormat(
         id: item.id,
         project: projectId,
         component_id: item.component_id,
+        component: { id: item.component_id }, // Required for backend views.py
         label: item.label || '',
         x: item.x,
         y: item.y,

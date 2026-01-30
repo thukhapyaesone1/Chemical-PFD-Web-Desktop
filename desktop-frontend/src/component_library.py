@@ -82,7 +82,7 @@ class FlowContainer(QWidget):
     def sizeHint(self):
         if self.layout():
              h = self.layout().heightForWidth(self.width())
-             return QSize(self.width(), h)
+             return QSize(280, h)
         return super().sizeHint()
         
     def minimumSizeHint(self):

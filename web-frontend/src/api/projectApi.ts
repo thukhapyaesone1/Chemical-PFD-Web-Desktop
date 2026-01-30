@@ -72,7 +72,6 @@ export const saveProjectCanvas = async (
     description?: string | null;
     canvas_state?: {
       items: any[];
-      component_id: number;  
       connections: any[];
       sequence_counter: number;
     };

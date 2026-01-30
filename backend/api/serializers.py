@@ -25,6 +25,9 @@ class ProjectSerializer(serializers.ModelSerializer):
             **validated_data
         )
 
+    # def update(self) removed - logic moved to View
+
+
 class ComponentSerializer(serializers.ModelSerializer):
     svg_url = serializers.SerializerMethodField()
     png_url = serializers.SerializerMethodField()
@@ -33,18 +36,24 @@ class ComponentSerializer(serializers.ModelSerializer):
         model = Component
         fields = '__all__'
     
-        def to_internal_value(self, data):
-            grips = data.get("grips")
+    def to_internal_value(self, data):
+        # Convert QueryDict to standard dict to handle JSON parsing correctly
+        if hasattr(data, 'dict'):
+            data = data.dict()
+        elif hasattr(data, 'copy'):
+            data = data.copy()
 
-            if isinstance(grips, str):
-                try:
-                    data["grips"] = json.loads(grips)
-                except json.JSONDecodeError:
-                    raise serializers.ValidationError({
-                        "grips": "Invalid JSON format"
-                    })
+        grips = data.get("grips")
 
-            return super().to_internal_value(data)
+        if isinstance(grips, str):
+            try:
+                data["grips"] = json.loads(grips)
+            except json.JSONDecodeError:
+                raise serializers.ValidationError({
+                    "grips": "Invalid JSON format"
+                })
+
+        return super().to_internal_value(data)
     
     def get_svg_url(self, obj):
         request = self.context.get('request')
@@ -104,18 +113,18 @@ class CanvasStateSerializer(serializers.ModelSerializer):
             "grips",
         ]
 
-        def to_internal_value(self, data):
-            grips = data.get("grips")
+    def to_internal_value(self, data):
+        grips = data.get("grips")
 
-            if isinstance(grips, str):
-                try:
-                    data["grips"] = json.loads(grips)
-                except json.JSONDecodeError:
-                    raise serializers.ValidationError({
-                        "grips": "Invalid JSON format"
-                    })
+        if isinstance(grips, str):
+            try:
+                data["grips"] = json.loads(grips)
+            except json.JSONDecodeError:
+                raise serializers.ValidationError({
+                    "grips": "Invalid JSON format"
+                })
 
-            return super().to_internal_value(data)
+        return super().to_internal_value(data)
 
 class ConnectionSerializer(serializers.ModelSerializer):
     sourceItemId = serializers.PrimaryKeyRelatedField(

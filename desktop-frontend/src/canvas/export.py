@@ -9,9 +9,257 @@ from PyQt5.QtGui import QPainter, QImage, QPageSize, QRegion, QColor
 from PyQt5.QtWidgets import QWidget, QLabel
 from PyQt5.QtPrintSupport import QPrinter
 from src.canvas import painter as canvas_painter
+from src.canvas import resources
 from src.component_widget import ComponentWidget
 from src.connection import Connection
+import src.app_state as app_state
+from src.api_client import update_project, get_components
 
+# ---------------------- CANVAS STATE SERIALIZATION ----------------------
+# ✅ Module-level cache
+_component_cache = None
+_cache_timestamp = None
+
+def get_component_id_map():
+    """Get s_no → id mapping with caching (5 min TTL)"""
+    global _component_cache, _cache_timestamp
+    
+    import time
+    now = time.time()
+    
+    # Cache for 5 minutes
+    if _component_cache and _cache_timestamp and (now - _cache_timestamp < 300):
+        return _component_cache
+    
+    backend_components = get_components()
+    _component_cache = {str(c.get('s_no', '')): c.get('id') 
+                        for c in backend_components if c.get('s_no')}
+    _cache_timestamp = now
+    
+    return _component_cache
+
+def serialize_canvas_state(canvas):
+    """
+    Convert canvas components and connections to backend-compatible format.
+    Returns dict matching the canvas_state structure from API docs.
+    """
+    # Use cached mapping
+    sno_to_id = get_component_id_map()
+
+    items = []
+    comp_map = {}  # Maps component object to its ID
+    
+    missing_snos = set()
+    
+    for i, comp in enumerate(canvas.components):
+        c_dict = comp.to_dict()
+        s_no = str(comp.config.get("s_no", ""))
+        
+        # Get component ID from backend using s_no
+        component_backend_id = sno_to_id.get(s_no)
+        
+        if not component_backend_id:
+            if s_no not in missing_snos:
+                print(f"[EXPORT ERROR] Component '{comp.config.get('name')}' (s_no: {s_no}) not found in DB. Skipping.")
+                missing_snos.add(s_no)
+            continue
+        
+        # KEY CHANGE: Start ID from 1 instead of 0
+        # The backend rejects '0' because it evaluates to False/Empty.
+        safe_id = i + 1
+        
+        item = {
+            "id": safe_id,    # Sends 1, 2, 3... (Backend accepts this)
+            "component_id": component_backend_id,
+            "component": {
+                "id": component_backend_id
+            },
+            "label": comp.config.get("default_label", ""),
+            "x": float(c_dict["x"]),
+            "y": float(c_dict["y"]),
+            "width": float(c_dict["width"]),
+            "height": float(c_dict["height"]),
+            "rotation": float(c_dict["rotation"]),
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "sequence": safe_id # Keep sequence matching ID for clarity
+        }
+        items.append(item)
+        comp_map[comp] = safe_id  # Store the 1-based ID for connection mapping
+    
+    connections = []
+    for i, conn in enumerate(canvas.connections):
+        # Resolve component using the safe_id (1-based)
+        start_id = comp_map.get(conn.start_component, -1)
+        end_id = comp_map.get(conn.end_component, -1)
+        
+        # Skip connections if the components attached were skipped
+        if start_id == -1 or end_id == -1:
+            continue
+        
+        connection_data = {
+            "id": i + 1, # Good practice to make connection IDs 1-based too
+            "sourceItemId": start_id,
+            "sourceGripIndex": conn.start_grip_index,
+            "targetItemId": end_id,
+            "targetGripIndex": conn.end_grip_index,
+            "waypoints": [
+                {"x": float(p.x()), "y": float(p.y())}
+                for p in conn.path
+            ]
+        }
+        connections.append(connection_data)
+    
+    return {
+        "items": items,
+        "connections": connections,
+        "sequence_counter": len(items)
+    }
+
+def save_canvas_state(canvas):
+    """
+    Save canvas state to backend via UPDATE API.
+    This is called every time the canvas is modified.
+    """
+    if not canvas.project_id:
+        print("[EXPORT ERROR] No project ID. Cannot save.")
+        return None
+    
+    canvas_state = serialize_canvas_state(canvas)
+    
+    # Debug output
+    print(f"[EXPORT] Saving {len(canvas_state['items'])} items and {len(canvas_state['connections'])} connections")
+    if canvas_state['items']:
+        print(f"[EXPORT] First item: {canvas_state['items'][0]}")
+    
+    result = update_project(
+        project_id=canvas.project_id,
+        name=canvas.project_name,
+        canvas_state=canvas_state
+    )
+    
+    if result:
+        print(f"[EXPORT] Canvas saved successfully to project {canvas.project_id}")
+    else:
+        print(f"[EXPORT ERROR] Failed to save canvas state")
+    
+    return result
+
+def load_canvas_from_project(canvas, project_data):
+    """
+    Load canvas from backend project data.
+    Expects project_data to have 'canvas_state' with items and connections.
+    """
+    try:
+        # Block auto-save during load
+        canvas._is_loading = True
+        canvas_state = project_data.get("canvas_state")
+        if not canvas_state:
+            print("[LOAD] No canvas_state in project data")
+            return True # Empty project is valid
+        
+        items_data = canvas_state.get("items", [])
+        conns_data = canvas_state.get("connections", [])
+        
+        print(f"[LOAD] Loading {len(items_data)} items and {len(conns_data)} connections")
+
+        # Clear existing canvas
+        canvas.components = []
+        canvas.connections = []
+        for c in canvas.children():
+            if isinstance(c, (ComponentWidget, QLabel)):
+                c.deleteLater()
+        
+        # Load Components
+        id_map = {}
+        
+        for d in items_data:
+            # Get component data from nested structure
+            component_data = d.get("component", {})
+            
+            # Try to find SVG path
+            s_no = d.get("s_no") or component_data.get("s_no", "")
+            name = d.get("name") or component_data.get("name", "")
+            svg_path = d.get("svg") or component_data.get("svg")
+            
+            if not svg_path and name:
+                # Try to find SVG by name
+                svg_path = resources.find_svg_path(name, canvas.base_dir)
+            
+            if not svg_path:
+                print(f"[LOAD] No SVG path for component: {name}")
+                continue
+            
+            # Resolve path if needed
+            if not os.path.exists(svg_path):
+                found = resources.find_svg_path(name or os.path.basename(svg_path), canvas.base_dir)
+                if found:
+                    svg_path = found
+                else:
+                    print(f"[LOAD] SVG not found for {name}")
+                    continue
+            
+            # Build config from item data
+            config = {
+                "s_no": s_no,
+                "parent": d.get("parent") or component_data.get("parent", ""),
+                "name": name,
+                "object": d.get("object") or component_data.get("object", ""),
+                "legend": d.get("legend") or component_data.get("legend", ""),
+                "suffix": d.get("suffix") or component_data.get("suffix", ""),
+                "default_label": d.get("label", "")
+            }
+            
+            comp = ComponentWidget(svg_path, canvas, config=config)
+            
+            # Set position and size from backend data
+            x = float(d.get("x", 0))
+            y = float(d.get("y", 0))
+            w = float(d.get("width", 100))
+            h = float(d.get("height", 100))
+            
+            comp.logical_rect = QRectF(x, y, w, h)
+            comp.rotation_angle = float(d.get("rotation", 0))
+            
+            # Apply visuals
+            comp.update_visuals(canvas.zoom_level)
+            comp.show()
+            
+            canvas.components.append(comp)
+            id_map[d.get("id")] = comp
+        
+        # Load Connections
+        for d in conns_data:
+            sid = d.get("sourceItemId")
+            eid = d.get("targetItemId")
+            
+            start_comp = id_map.get(sid)
+            end_comp = id_map.get(eid)
+            
+            if start_comp:
+                sg = d.get("sourceGripIndex", 0)
+                eg = d.get("targetGripIndex", 0)
+                
+                conn = Connection(start_comp, sg, "right")
+                if end_comp:
+                    conn.set_end_grip(end_comp, eg, "left")
+                
+                conn.update_path(canvas.components, canvas.connections)
+                canvas.connections.append(conn)
+        
+        canvas.update()
+        return True
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[LOAD ERROR] Failed to load project: {e}")
+        return False
+    
+    finally:
+        # Re-enable auto-save
+        canvas._is_loading = False
+    
 # ---------------------- HELPERS ----------------------
 def get_content_rect(canvas, padding=50):
     """Calculates the bounding rectangle of all canvas content."""
@@ -47,9 +295,14 @@ def render_to_image(canvas, rect, scale=1.0):
         painter.translate(-rect.topLeft())
         
         # Draw Connections
+        painter.save()
+        if hasattr(canvas, 'zoom_level'):
+            z = canvas.zoom_level
+            painter.scale(z, z)
         canvas_painter.draw_connections(painter, canvas.connections, canvas.components)
+        painter.restore()
         
-        # Draw Components (Manually to handle custom render logic if needed)
+        # Draw Components
         for comp in canvas.components:
             painter.save()
             painter.translate(comp.pos())
@@ -61,7 +314,6 @@ def render_to_image(canvas, rect, scale=1.0):
 
 def draw_equipment_table(painter, canvas, page_rect, start_y):
     """Draws the equipment table on the painter."""
-    # Config
     row_height = 35
     w = page_rect.width()
     col_widths = [w * 0.15, w * 0.25, w * 0.60]
@@ -69,7 +321,7 @@ def draw_equipment_table(painter, canvas, page_rect, start_y):
     
     # Headers
     y = start_y
-    painter.setFont(QPainter().font()) # Reset
+    painter.setFont(QPainter().font())
     f = painter.font()
     f.setPointSize(10); f.setBold(True); painter.setFont(f)
     
@@ -112,101 +364,118 @@ def draw_equipment_table(painter, canvas, page_rect, start_y):
 # ---------------------- EXPORT FUNCTIONS ----------------------
 def export_to_image(canvas, filename):
     """Export canvas to high-quality image with proper rendering"""
-    # Use higher resolution for better quality
-    scale_factor = 3.0
+    # STRATEGY: 
+    # 1. Save current zoom
+    # 2. Reset zoom to 1.0 (This forces all components to render at logic size = visual size)
+    # 3. Export with Scale 3.0 (High Res)
+    # 4. Restore zoom
     
-    rect = get_content_rect(canvas)
-    image = render_to_image(canvas, rect, scale=scale_factor)
+    old_z = getattr(canvas, 'zoom_level', 1.0)
     
-    # Save with maximum quality
-    image.save(filename, quality=100)
+    # 1. & 2. Reset Zoom
+    if old_z != 1.0:
+        canvas.zoom_level = 1.0
+        canvas.apply_zoom()
+        
+    try:
+        # 3. Export
+        scale_factor = 3.0
+        rect = get_content_rect(canvas)
+        image = render_to_image(canvas, rect, scale=scale_factor)
+        image.save(filename, quality=100)
+    finally:
+        # 4. Restore Zoom
+        if old_z != 1.0:
+            canvas.zoom_level = old_z
+            canvas.apply_zoom()
 
 def export_to_pdf(canvas, filename):
     """Export canvas to high-quality PDF"""
-    rect = get_content_rect(canvas)
     
-    # Use high resolution for PDF
-    scale_factor = 4.0
-    image = render_to_image(canvas, rect, scale=scale_factor)
-    
-    # PDF Setup with HighResolution mode
-    printer = QPrinter(QPrinter.HighResolution)
-    printer.setOutputFormat(QPrinter.PdfFormat)
-    printer.setOutputFileName(filename)
-    
-    # Calculate size in millimeters for proper scaling
-    mm_per_inch = 25.4
-    # Use printer's resolution for accurate conversion
-    dpi = printer.resolution()
-    
-    s = rect.size()
-    w_mm = (s.width() / dpi) * mm_per_inch
-    h_mm = (s.height() / dpi) * mm_per_inch
-    
-    printer.setPageSize(QPageSize(QSizeF(w_mm, h_mm), QPageSize.Millimeter))
-    printer.setPageMargins(0, 0, 0, 0, QPrinter.Millimeter)
-    
-    painter = QPainter(printer)
-    try:
-        # Enable high-quality rendering
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        painter.setRenderHint(QPainter.HighQualityAntialiasing)
+    # STRATEGY: Reset Zoom to 1.0
+    old_z = getattr(canvas, 'zoom_level', 1.0)
+    if old_z != 1.0:
+        canvas.zoom_level = 1.0
+        canvas.apply_zoom()
         
-        # Draw the high-res image to fill the page
-        target_rect = painter.viewport()
-        painter.drawImage(target_rect, image)
+    try:
+        rect = get_content_rect(canvas)
+        scale_factor = 4.0
+        image = render_to_image(canvas, rect, scale=scale_factor)
+        
+        # PDF Setup with HighResolution mode
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setOutputFormat(QPrinter.PdfFormat)
+        printer.setOutputFileName(filename)
+        
+        # Calculate size in millimeters for proper scaling
+        mm_per_inch = 25.4
+        # Use printer's resolution for accurate conversion
+        dpi = printer.resolution()
+        
+        s = rect.size()
+        w_mm = (s.width() / dpi) * mm_per_inch
+        h_mm = (s.height() / dpi) * mm_per_inch
+        
+        printer.setPageSize(QPageSize(QSizeF(w_mm, h_mm), QPageSize.Millimeter))
+        printer.setPageMargins(0, 0, 0, 0, QPrinter.Millimeter)
+        
+        painter = QPainter(printer)
+        try:
+            # Enable high-quality rendering
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            painter.setRenderHint(QPainter.HighQualityAntialiasing)
+            
+            # Draw the high-res image to fill the page
+            target_rect = painter.viewport()
+            painter.drawImage(target_rect, image)
+        finally:
+            painter.end()
     finally:
-        painter.end()
+        # Restore Zoom
+        if old_z != 1.0:
+            canvas.zoom_level = old_z
+            canvas.apply_zoom()
 
 def generate_report_pdf(canvas, filename):
-    """Generate multi-page PDF report with diagram and equipment list"""
-    printer = QPrinter(QPrinter.ScreenResolution)
-    printer.setOutputFormat(QPrinter.PdfFormat)
-    printer.setOutputFileName(filename)
-    printer.setPageSize(QPageSize(QPageSize.A4))
-    printer.setPageMargins(10, 10, 10, 10, QPrinter.Millimeter)
-    
-    painter = QPainter(printer)
+    """Generate professional PDF report using ReportLab"""
     try:
-        # Page 1: Diagram
-        rect = get_content_rect(canvas)
-        # Use higher scale for crisp rendering
-        image = render_to_image(canvas, rect, scale=4.0)
+        from src.reports.generator import PDFReportGenerator
+    except ImportError:
+        print("ReportLab not found. Please install it: pip install reportlab")
+        return
+
+    # Extract Data
+    data = []
+    
+    # Sort components by tag for cleaner report
+    sorted_components = sorted(canvas.components, key=lambda c: c.config.get("default_label", ""))
+    
+    for comp in sorted_components:
+        # Extract basic fields
+        tag = comp.config.get("default_label", "")
+        name = comp.config.get("name", "")
+        obj_type = comp.config.get("object", "")
         
-        page_rect = printer.pageRect(QPrinter.DevicePixel).toRect()
-        
-        # Title
-        f = painter.font()
-        f.setPointSize(16)
-        f.setBold(True)
-        painter.setFont(f)
-        painter.drawText(page_rect, Qt.AlignTop | Qt.AlignHCenter, "Process Flow Diagram")
-        
-        # Image placement
-        y_pos = int(0.8 * printer.logicalDpiY())
-        avail_h = page_rect.height() - y_pos - 20
-        
-        # Scale with FastTransformation for high quality
-        scaled = image.scaled(
-            QSize(page_rect.width(), avail_h),
-            Qt.KeepAspectRatio,
-            Qt.FastTransformation
-        )
             
-        x_pos = (page_rect.width() - scaled.width()) // 2
-        painter.drawImage(x_pos, y_pos, scaled)
+        # FORCE "no description" for all components per user request
+        name = "no description"
+            
+        # Fallback for Type if empty (use name or generic)
+        if not obj_type:
+            obj_type = name if name else "Equipment"
+            
+        data.append({
+            'tag': tag,
+            'type': obj_type,
+            'description': name
+        })
         
-        # Page 2: Table
-        printer.newPage()
-        f.setPointSize(14)
-        painter.setFont(f)
-        painter.drawText(page_rect, Qt.AlignTop | Qt.AlignHCenter, "List of Equipment")
-        
-        draw_equipment_table(painter, canvas, page_rect, 80)
-        
-    finally:
-        painter.end()
+    # Generate
+    generator = PDFReportGenerator(filename)
+    generator.generate(data)
+    print(f"Report generated at {filename}")
 
 def export_to_excel(canvas, filename):
     """Exports the list of equipment to an Excel file with auto-width columns."""
@@ -259,56 +528,169 @@ def export_to_excel(canvas, filename):
 
 # ---------------------- PFD SERIALIZATION ----------------------
 def save_to_pfd(canvas, filename):
-    data = {
-        "version": "1.0",
-        "components": [
-            {**c.to_dict(), "id": i} for i, c in enumerate(canvas.components)
-        ],
-        "connections": []
-    }
+    """Saves project in legacy .pfd format"""
+    import datetime
+    
+    items = []
     comp_map = {c: i for i, c in enumerate(canvas.components)}
-    data["connections"] = [c.to_dict(comp_map) for c in canvas.connections]
+    
+    for i, c in enumerate(canvas.components):
+        c_dict = c.to_dict()
+        
+        item = {
+            "id": i,
+            "x": c_dict["x"],
+            "y": c_dict["y"],
+            "width": c_dict["width"],
+            "height": c_dict["height"],
+            "rotation": c_dict["rotation"],
+            "svg": c_dict["svg_path"],
+            "name": c_dict["config"].get("name", ""),
+            "object": c_dict["config"].get("object", ""),
+            "s_no": c_dict["config"].get("s_no", ""),
+            "legend": c_dict["config"].get("legend", ""),
+            "suffix": c_dict["config"].get("suffix", ""),
+            "label": c_dict["config"].get("default_label", ""),
+            "config": c_dict["config"],
+            "grips": c.get_grips()
+        }
+        items.append(item)
+
+    connections = []
+    for i, c in enumerate(canvas.connections):
+        start_id = comp_map.get(c.start_component, -1)
+        end_id = comp_map.get(c.end_component, -1)
+        
+        conn = {
+            "id": i,
+            "sourceItemId": start_id,
+            "sourceGripIndex": c.start_grip_index,
+            "targetItemId": end_id,
+            "targetGripIndex": c.end_grip_index,
+            "start_side": c.start_side,
+            "end_side": c.end_side,
+            "path_offset": c.path_offset,
+            "start_adjust": c.start_adjust,
+            "end_adjust": c.end_adjust,
+        }
+        connections.append(conn)
+
+    data = {
+        "version": "1.0.0",
+        "displayedAt": datetime.datetime.now().isoformat(),
+        "editorVersion": "1.0.0",
+        "canvasState": {
+            "items": items,
+            "connections": connections,
+            "sequenceCounter": len(items)
+        },
+        "viewport": {
+            "scale": getattr(canvas, "zoom_level", 1.0),
+            "position": {"x": 0, "y": 0}
+        },
+        "project": {
+            "id": "desktop-export",
+            "name": os.path.basename(filename).replace(".pfd", ""),
+            "createdAt": datetime.datetime.now().isoformat()
+        }
+    }
         
     with open(filename, 'w') as f:
         json.dump(data, f, indent=4)
 
 def load_from_pfd(canvas, filename):
+    """Load from legacy .pfd format"""
     if not os.path.exists(filename): return False
     try:
         with open(filename, 'r') as f: data = json.load(f)
         
         canvas.components = []
         canvas.connections = []
-        # Clear UI
         for c in canvas.children():
             if isinstance(c, (ComponentWidget, QLabel)): c.deleteLater()
             
-        # Load Components
+        if "canvasState" in data:
+            items_data = data["canvasState"].get("items", [])
+            conns_data = data["canvasState"].get("connections", [])
+        elif "components" in data:
+            items_data = data.get("components", [])
+            conns_data = data.get("connections", [])
+        else:
+            print("Unknown file format")
+            return False
+
         id_map = {}
-        for d in data.get("components", []):
-            if not d.get("svg_path"): continue
-            comp = ComponentWidget(d["svg_path"], canvas, config=d.get("config", {}))
-            comp.move(d.get("x",0), d.get("y",0))
-            comp.resize(d.get("width",100), d.get("height",100))
-            comp.rotation_angle = d.get("rotation", 0)
-            comp.update(); comp.show()
-            canvas.components.append(comp)
-            id_map[d.get("id")] = comp
+        
+        for d in items_data:
+            svg_path = d.get("svg_path") or d.get("svg")
+            if not svg_path: continue
             
-        # Load Connections
-        for d in data.get("connections", []):
-            s, e = id_map.get(d.get("start_id")), id_map.get(d.get("end_id"))
+            if not os.path.exists(svg_path):
+                name = d.get("name") or d.get("object") or os.path.basename(svg_path)
+                found = resources.find_svg_path(name, canvas.base_dir)
+                if found:
+                    svg_path = found
+                else:
+                    print(f"Warning: SVG not found for {name} ({svg_path})")
+                    continue
+            
+            config = d.get("config", {})
+            if not config:
+                config = {
+                    "name": d.get("name", ""),
+                    "object": d.get("object", ""),
+                    "s_no": d.get("s_no", ""),
+                    "legend": d.get("legend", ""),
+                    "suffix": d.get("suffix", ""),
+                    "default_label": d.get("label", "")
+                }
+            
+            comp = ComponentWidget(svg_path, canvas, config=config)
+            
+            x = d.get("x", 0)
+            y = d.get("y", 0)
+            w = d.get("width", 100)
+            h = d.get("height", 100)
+            
+            comp.logical_rect = QRectF(x, y, w, h)
+            comp.rotation_angle = d.get("rotation", 0)
+            
+            comp.update_visuals(canvas.zoom_level)
+            comp.show()
+            canvas.components.append(comp)
+            
+            comp_id = d.get("id")
+            if comp_id is not None:
+                id_map[comp_id] = comp
+            
+        for d in conns_data:
+            sid = d.get("sourceItemId") if "sourceItemId" in d else d.get("start_id")
+            eid = d.get("targetItemId") if "targetItemId" in d else d.get("end_id")
+            
+            s = id_map.get(sid)
+            e = id_map.get(eid)
+            
             if s:
-                c = Connection(s, d.get("start_grip"), d.get("start_side"))
-                if e: c.set_end_grip(e, d.get("end_grip"), d.get("end_side"))
+                sg = d.get("sourceGripIndex") if "sourceGripIndex" in d else d.get("start_grip")
+                eg = d.get("targetGripIndex") if "targetGripIndex" in d else d.get("end_grip")
+                
+                ss = d.get("start_side", "right")
+                es = d.get("end_side", "left")
+
+                c = Connection(s, sg, ss)
+                if e: c.set_end_grip(e, eg, es)
+                
                 c.path_offset = d.get("path_offset", 0.0)
                 c.start_adjust = d.get("start_adjust", 0.0)
                 c.end_adjust = d.get("end_adjust", 0.0)
+                
                 c.update_path(canvas.components, canvas.connections)
                 canvas.connections.append(c)
                 
         canvas.update()
         return True
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error loading PFD: {e}")
         return False

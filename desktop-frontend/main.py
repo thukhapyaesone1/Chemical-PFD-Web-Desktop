@@ -61,8 +61,11 @@ def main():
     landing.new_project_clicked.connect(lambda: slide_to_index(4))
     
     def handle_landing_open():
-        canvas.on_open_file()
-        slide_to_index(4)
+        success = canvas.on_open_file()
+        if success:
+            slide_to_index(4)
+        else:
+            slide_to_index(3, direction=-1)
         
     landing.open_project_clicked.connect(handle_landing_open)
 

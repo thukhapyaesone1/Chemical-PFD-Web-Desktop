@@ -17,15 +17,11 @@ class OverlayContainer(QWidget):
         self.canvas = canvas
         self.scroll_area = scroll_area
         
-        # Main Layout (Stacking)
         layout = QtWidgets.QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         
-        # Layer 0: Content
         layout.addWidget(self.scroll_area, 0, 0)
         
-        # Layer 1: Toolbar (Bottom Right)
-        # We put toolbar directly in grid
         self.toolbar_frame = QtWidgets.QFrame()
         self.toolbar_frame.setStyleSheet("background-color: white; border: 1px solid #e2e8f0; border-radius: 8px;")
         btn_layout = QtWidgets.QHBoxLayout(self.toolbar_frame)
@@ -47,17 +43,8 @@ class OverlayContainer(QWidget):
         btn_layout.addWidget(self.zoom_fit_btn)
         btn_layout.addWidget(self.zoom_in_btn)
         
-        # Add to main, aligned (margin for offset)
         layout.addWidget(self.toolbar_frame, 0, 0, Qt.AlignBottom | Qt.AlignRight)
-        
-        # Set margin for the toolbar itself so it's not flush
-        layout.setContentsMargins(0, 0, 20, 20) 
-        
-        # Reset contents margins for the scroll area? No, Grid handles it.
-        # But wait, setContentsMargins applies to the whole widget.
-        # We want invalidation? No.
-        # Better: Put scroll area at 0,0. Put Toolbar in a wrapper at 0,0 aligned.
-        
+        layout.setContentsMargins(0, 0, 20, 20)
 
 
 class ImageSubWindow(QMdiSubWindow):
@@ -68,13 +55,12 @@ class ImageSubWindow(QMdiSubWindow):
         
         self.scale_factor = 1.0
         self.original_pixmap = None
+        self.first_show = True
         
-        # Scroll Area
         self.scroll_area = QtWidgets.QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.setWidget(self.scroll_area)
         
-        # Image Label
         self.image_label = QtWidgets.QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
         self.scroll_area.setWidget(self.image_label)
@@ -109,6 +95,29 @@ class ImageSubWindow(QMdiSubWindow):
         if self.scale_factor < 0.1: self.scale_factor = 0.1
         self.update_image_size()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.first_show:
+            self.first_show = False
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(50, self.fit_to_window)
+
+    def fit_to_window(self):
+        if not self.original_pixmap: return
+        viewport = self.scroll_area.viewport()
+        view_size = viewport.size()
+        
+        if view_size.width() <= 0 or view_size.height() <= 0: return
+        
+        img_size = self.original_pixmap.size()
+        if img_size.width() <= 0 or img_size.height() <= 0: return
+        
+        ratio_w = view_size.width() / img_size.width()
+        ratio_h = view_size.height() / img_size.height()
+        
+        self.scale_factor = min(ratio_w, ratio_h) * 0.95
+        self.update_image_size()
+
     def update_image_size(self):
         if self.original_pixmap and not self.original_pixmap.isNull():
             new_size = self.original_pixmap.size() * self.scale_factor
@@ -127,8 +136,9 @@ class PDFSubWindow(QMdiSubWindow):
         self.pdf_path = pdf_path
         self.setAttribute(Qt.WA_DeleteOnClose)
         
-        self.zoom_level = 1.5  # Initial zoom
+        self.zoom_level = 1.0
         self.doc = None
+        self.first_show = True
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -144,7 +154,7 @@ class PDFSubWindow(QMdiSubWindow):
 
     def load_pdf(self):
         try:
-            import fitz  # PyMuPDF
+            import fitz
             self.doc = fitz.open(self.pdf_path)
             self.render_pages()
         except Exception as e:
@@ -160,18 +170,15 @@ class PDFSubWindow(QMdiSubWindow):
         from PyQt5.QtWidgets import QLabel
         from PyQt5.QtCore import Qt
 
-        # Clear existing widgets
         for i in reversed(range(self.layout.count())): 
             widget = self.layout.itemAt(i).widget()
             if widget is not None:
                 widget.deleteLater()
 
-        # Render each page
         for page_num in range(len(self.doc)):
             page = self.doc.load_page(page_num)
             pix = page.get_pixmap(matrix=fitz.Matrix(self.zoom_level, self.zoom_level))
             
-            # Convert to QImage
             fmt = QImage.Format_RGB888
             if pix.alpha:
                 fmt = QImage.Format_RGBA8888
@@ -198,13 +205,37 @@ class PDFSubWindow(QMdiSubWindow):
             super().wheelEvent(event)
 
     def zoom_in(self):
-        self.zoom_level += 0.25
-        if self.zoom_level > 5.0: self.zoom_level = 5.0
+        self.zoom_level *= 1.2
+        if self.zoom_level > 20.0: self.zoom_level = 20.0
         self.render_pages()
 
     def zoom_out(self):
-        self.zoom_level -= 0.25
-        if self.zoom_level < 0.5: self.zoom_level = 0.5
+        self.zoom_level /= 1.2
+        if self.zoom_level < 0.1: self.zoom_level = 0.1
+        self.render_pages()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.first_show:
+            self.first_show = False
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(50, self.fit_to_window)
+
+    def fit_to_window(self):
+        if not self.doc: return
+        
+        viewport = self.scroll_area.viewport()
+        view_size = viewport.size()
+        
+        if view_size.width() <= 0: return
+        
+        page = self.doc.load_page(0)
+        rect = page.rect
+        
+        ratio_w = view_size.width() / rect.width
+        ratio_h = view_size.height() / rect.height
+        
+        self.zoom_level = min(ratio_w, ratio_h) * 0.95
         self.render_pages()
 
 class CanvasSubWindow(QMdiSubWindow):
@@ -228,7 +259,6 @@ class CanvasScreen(QMainWindow):
     def closeEvent(self, event):
         """Handle application close by attempting to close all tabs."""
         self.mdi_area.closeAllSubWindows()
-        # If any subwindows remain (user cancelled save), ignore the close event
         if self.mdi_area.subWindowList():
             event.ignore()
         else:
@@ -248,14 +278,12 @@ class CanvasScreen(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Splitter for Resizable Layout (Sidebar | Canvas)
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(2)
         splitter.setStyleSheet("QSplitter::handle { background-color: #e2e8f0; }")
 
         self.library = ComponentLibrary(self)
-        self.library.setMinimumWidth(200) # Reduced min width to allow more flex
-        # self.library.setMinimumWidth(280) 
+        self.library.setMinimumWidth(200)
         
         self.mdi_area = QtWidgets.QMdiArea()
         self.mdi_area.setViewMode(QtWidgets.QMdiArea.TabbedView)
@@ -263,20 +291,15 @@ class CanvasScreen(QMainWindow):
         self.mdi_area.setTabsMovable(True)
         self.mdi_area.setBackground(QBrush(QColor("#505050")))
 
-        # Add to Splitter
         splitter.addWidget(self.library)
         splitter.addWidget(self.mdi_area)
         
-        # Set Stretch: Library (0, keeps size), Canvas (1, takes rest)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         
         main_layout.addWidget(splitter)
 
-        # Connect to theme manager for MDI area updates
         theme_manager.theme_changed.connect(self.apply_mdi_theme)
-        
-        # Apply initial MDI theme
         self.apply_mdi_theme(theme_manager.current_theme)
 
         apply_theme_to_screen(self)
@@ -285,13 +308,10 @@ class CanvasScreen(QMainWindow):
     def _connect_menu_signals(self):
         self.menu_manager.new_project_clicked.connect(self.on_new_project)
         self.menu_manager.back_home_clicked.connect(self.on_back_home)
-        self.menu_manager.back_home_clicked.connect(self.on_back_home)
         self.menu_manager.delete_clicked.connect(self.on_delete_component)
         self.menu_manager.logout_clicked.connect(self.logout)
         self.menu_manager.undo_clicked.connect(self.on_undo)
         self.menu_manager.redo_clicked.connect(self.on_redo)
-
-        # Placeholders
         self.menu_manager.open_project_clicked.connect(self.on_open_file)
         self.menu_manager.save_project_clicked.connect(self.on_save_file)
         self.menu_manager.save_project_as_clicked.connect(self.on_save_as_file)
@@ -301,109 +321,161 @@ class CanvasScreen(QMainWindow):
 
     def apply_mdi_theme(self, theme):
         """Apply theme to MDI area title bar and tabs."""
-        print(f"[CANVAS] Applying MDI theme: {theme}")
-        
         if theme == "dark":
             mdi_stylesheet = """
-                QMdiArea {
-                    background-color: #0f172a;
-                }
-                
-                /* Tab Bar Styling */
+                QMdiArea { background-color: #0f172a; }
                 QTabBar::tab {
-                    background-color: #1e293b;
-                    color: #cbd5e1;
-                    border: 1px solid #334155;
-                    border-bottom: none;
-                    border-top-left-radius: 6px;
-                    border-top-right-radius: 6px;
-                    padding: 8px 16px;
-                    margin-right: 2px;
-                    font-size: 13px;
+                    background-color: #1e293b; color: #cbd5e1;
+                    border: 1px solid #334155; border-bottom: none;
+                    border-top-left-radius: 6px; border-top-right-radius: 6px;
+                    padding: 8px 16px; margin-right: 2px; font-size: 13px;
                 }
-                
                 QTabBar::tab:selected {
-                    background-color: #3b82f6;
-                    color: #ffffff;
-                    border-color: #3b82f6;
-                    font-weight: bold;
+                    background-color: #3b82f6; color: #ffffff;
+                    border-color: #3b82f6; font-weight: bold;
                 }
-                
                 QTabBar::tab:hover:!selected {
-                    background-color: #334155;
-                    color: #f1f5f9;
+                    background-color: #334155; color: #f1f5f9;
                 }
-                
-                /* Subwindow styling */
-                QMdiSubWindow {
-                    background-color: #0f172a;
-                }
+                QMdiSubWindow { background-color: #0f172a; }
             """
-        else:  # light theme
+        else:
             mdi_stylesheet = """
-                QMdiArea {
-                    background-color: #fffaf5;
-                }
-                
-                /* Tab Bar Styling */
+                QMdiArea { background-color: #fffaf5; }
                 QTabBar::tab {
-                    background-color: #f4e8dc;
-                    color: #3A2A20;
-                    border: 1px solid #C97B5A;
-                    border-bottom: none;
-                    border-top-left-radius: 6px;
-                    border-top-right-radius: 6px;
-                    padding: 8px 16px;
-                    margin-right: 2px;
-                    font-size: 13px;
+                    background-color: #f4e8dc; color: #3A2A20;
+                    border: 1px solid #C97B5A; border-bottom: none;
+                    border-top-left-radius: 6px; border-top-right-radius: 6px;
+                    padding: 8px 16px; margin-right: 2px; font-size: 13px;
                 }
-                
                 QTabBar::tab:selected {
-                    background-color: #C97B5A;
-                    color: #ffffff;
-                    border-color: #C97B5A;
-                    font-weight: bold;
+                    background-color: #C97B5A; color: #ffffff;
+                    border-color: #C97B5A; font-weight: bold;
                 }
-                
                 QTabBar::tab:hover:!selected {
-                    background-color: #ffffff;
-                    color: #3A2A20;
+                    background-color: #ffffff; color: #3A2A20;
                 }
-                
-                /* Subwindow styling */
-                QMdiSubWindow {
-                    background-color: #fffaf5;
-                }
+                QMdiSubWindow { background-color: #fffaf5; }
             """
         
         self.mdi_area.setStyleSheet(mdi_stylesheet)
-        # print(f"[CANVAS] MDI theme applied: {theme}")
 
     def on_new_project(self):
+        """Create a new canvas and immediately create a backend project."""
+        from src.api_client import create_project
+        from PyQt5.QtWidgets import QInputDialog
+        
+        # Ask for project name
+        project_name, ok = QInputDialog.getText(
+            self, 
+            "New Project", 
+            "Enter project name:",
+            text="Untitled Project"
+        )
+        
+        if not ok or not project_name.strip():
+            return
+        
+        # Create project on backend
+        project_data = create_project(name=project_name.strip(), description="")
+        
+        if not project_data:
+            QtWidgets.QMessageBox.critical(
+                self, 
+                "Error", 
+                "Failed to create project on server."
+            )
+            return
+        
+        # Create and open the project (Pass True for is_freshly_created)
+        self._create_canvas_for_project(project_data, is_freshly_created=True)
+
+    def _create_canvas_for_project(self, project_data, is_freshly_created=False):
+        """Helper to create a canvas window for a project (new or existing)"""
+        # Store project info in app state
+        app_state.current_project_id = project_data.get("id")
+        app_state.current_project_name = project_data.get("name")
+        
+        print(f"[PROJECT] Opening project: ID={app_state.current_project_id}, Name={app_state.current_project_name}")
+        
+        # Create canvas
         canvas = CanvasWidget(self)
         canvas.update_canvas_theme()
         
-        # Scroll Area Wrapper
+        # Link canvas to project
+        canvas.project_id = app_state.current_project_id
+        canvas.project_name = app_state.current_project_name
+
+        # Set flag on canvas ---
+        canvas.is_new_project = is_freshly_created
+        
+        # Load existing canvas state if it exists
+        canvas_state = project_data.get("canvas_state")
+        if canvas_state and canvas_state.get("items"):
+            from src.canvas.export import load_canvas_from_project
+            if not load_canvas_from_project(canvas, project_data):
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Warning",
+                    "Project loaded but some components may be missing."
+                )
+        
+        # Mark as clean after loading
+        canvas.undo_stack.setClean()
+        canvas.is_modified = False
+        
+        # Setup UI
         scroll = QtWidgets.QScrollArea()
         scroll.setWidget(canvas)
-        scroll.setWidgetResizable(False) # Let canvas dictate size
+        scroll.setWidgetResizable(False)
         scroll.setAlignment(Qt.AlignCenter)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
-        # Wrap in Overlay
         overlay = OverlayContainer(canvas, scroll)
 
         sub = CanvasSubWindow()
         sub.setWidget(overlay)
         sub.setAttribute(Qt.WA_DeleteOnClose)
         self.mdi_area.addSubWindow(sub)
-        sub.setWindowTitle("New Project")
+        sub.setWindowTitle(f"{app_state.current_project_name}")
         sub.showMaximized()
+        
+    def open_project_from_backend(self, project_id):
+        """Load and open a project from backend by ID."""
+        from src.api_client import get_project
+        
+        # Fetch project data
+        project_data = get_project(project_id)
+        
+        if not project_data:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to load project (ID: {project_id})"
+            )
+            return
+        
+        # Existing project -> is_freshly_created=False
+        self._create_canvas_for_project(project_data, is_freshly_created=False)
+
+    def showEvent(self, event):
+        """Handle show event - check if there's a pending project to load."""
+        super().showEvent(event)
+        
+        # Check if there's a pending project to load
+        if app_state.pending_project_id:
+            project_id = app_state.pending_project_id
+            app_state.pending_project_id = None
+            
+            # Load project after a short delay to ensure UI is ready
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(100, lambda: self.open_project_from_backend(project_id))
 
     def open_add_symbol_dialog(self):
         from src.add_symbol_dialog import AddSymbolDialog
-        dlg = AddSymbolDialog(self)
-        # When dialog is accepted, refresh the library
+        # Get current theme from manager
+        current_theme = theme_manager.current_theme
+        dlg = AddSymbolDialog(self, theme=current_theme)
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
             self.library.reload_components()
 
@@ -412,17 +484,11 @@ class CanvasScreen(QMainWindow):
 
     def _register_shortcuts(self):
         """Register cross-platform shortcuts for Add Symbol dialog."""
-
-        # Windows/Linux -> Ctrl + A
         shortcut_ctrl_a = QShortcut(QKeySequence("Ctrl+A"), self)
         shortcut_ctrl_a.activated.connect(self.open_add_symbol_dialog)
 
-        # macOS -> Cmd + A  (Meta key = Command key)
         shortcut_cmd_a = QShortcut(QKeySequence("Meta+A"), self)
         shortcut_cmd_a.activated.connect(self.open_add_symbol_dialog)
-
-        # print("Shortcut registered: Ctrl+A / Cmd+A -> Add New Symbol")
-
 
     def on_delete_component(self):
         active_sub = self.mdi_area.currentSubWindow()
@@ -438,22 +504,6 @@ class CanvasScreen(QMainWindow):
         active_sub = self.mdi_area.currentSubWindow()
         if active_sub and isinstance(active_sub, CanvasSubWindow):
             active_sub.get_canvas().undo_stack.redo()
-
-    def on_generate_image(self):
-        active_sub = self.mdi_area.currentSubWindow()
-        if not active_sub or not isinstance(active_sub, CanvasSubWindow):
-            return
-            
-        canvas = active_sub.get_canvas()
-        options = QtWidgets.QFileDialog.Options()
-        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Generate Image", "", 
-            "JPEG Files (*.jpg);;PNG Files (*.png)", 
-            options=options
-        )
-        
-        if filename:
-            canvas.export_to_image(filename)
 
     def on_generate_excel(self):
         active_sub = self.mdi_area.currentSubWindow()
@@ -500,23 +550,53 @@ class CanvasScreen(QMainWindow):
                 QtWidgets.QMessageBox.critical(self, "Error", f"Failed to generate report:\n{str(e)}")
 
     def on_save_file(self):
+        """Save current canvas to backend."""
         active_sub = self.mdi_area.currentSubWindow()
         if not active_sub or not isinstance(active_sub, CanvasSubWindow):
             QtWidgets.QMessageBox.information(self, "Information", "No file to save.")
             return
             
         canvas = active_sub.get_canvas()
-        # If file already has a path, save directly
-        if canvas.file_path:
-            try:
-                canvas.save_file(canvas.file_path)
-                active_sub.setWindowTitle(f"Canvas - {os.path.basename(canvas.file_path)}")
-                QtWidgets.QMessageBox.information(self, "Success", f"Project saved to {canvas.file_path}")
-            except Exception as e:
-                 QtWidgets.QMessageBox.critical(self, "Error", f"Failed to save file:\n{str(e)}")
-        else:
-            # Otherwise treat as Save As
-            self.on_save_as_file()
+        
+        # Check if canvas has project ID
+        if not hasattr(canvas, 'project_id') or not canvas.project_id:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Warning",
+                "This canvas is not linked to a backend project."
+            )
+            return
+        
+        from src.canvas.export import save_canvas_state
+        
+        try:
+            result = save_canvas_state(canvas)
+            
+            if result:
+                # Mark as saved
+                canvas.undo_stack.setClean()
+
+                # Update flag on canvas ---
+                canvas.is_new_project = False
+
+                QtWidgets.QMessageBox.information(
+                    self, 
+                    "Success", 
+                    f"Project '{canvas.project_name}' saved successfully."
+                )
+            else:
+                QtWidgets.QMessageBox.critical(
+                    self,
+                    "Error",
+                    "Failed to save project to server."
+                )
+                
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self, 
+                "Error", 
+                f"Failed to save project:\n{str(e)}"
+            )
 
     def on_save_as_file(self):
         active_sub = self.mdi_area.currentSubWindow()
@@ -549,10 +629,10 @@ class CanvasScreen(QMainWindow):
                 QtWidgets.QMessageBox.information(self, "Success", f"Exported to {filename}")
 
             else:
-                # Default to PFD
                 if not filename.lower().endswith(".pfd"):
                     filename += ".pfd"
-                canvas.save_file(filename)
+                from src.canvas.export import save_to_pfd
+                save_to_pfd(canvas, filename)
                 active_sub.setWindowTitle(f"Canvas - {os.path.basename(filename)}")
                 QtWidgets.QMessageBox.information(self, "Success", f"Project saved to {filename}")
 
@@ -570,40 +650,72 @@ class CanvasScreen(QMainWindow):
         if not filename:
             return False
 
-        # PFD File -> Canvas
         if filename.lower().endswith(".pfd"):
-            self.on_new_project() # Creates new tab/canvas
+            # For .pfd files, create a NEW project (don't ask for name)
+            from src.api_client import create_project
             
-            # activeSubWindow might return None immediately after creation depending on focus
-            active_sub = self.mdi_area.activeSubWindow()
-            if not active_sub:
-                # Fallback: Get the last added subwindow
-                subs = self.mdi_area.subWindowList()
-                if subs:
-                    active_sub = subs[-1]
+            # Create project with filename as name
+            base_name = os.path.splitext(os.path.basename(filename))[0]
+            project_data = create_project(name=f"{base_name} (Imported)", description="")
             
-            if active_sub:
-                canvas = active_sub.get_canvas()
-                try:
-                    if canvas.open_file(filename):
-                        active_sub.setWindowTitle(f"Canvas - {os.path.basename(filename)}")
-                    else:
-                        QtWidgets.QMessageBox.warning(self, "Error", "Failed to load file. It might be corrupted or incompatible.")
-                        active_sub.close()
-                except Exception as e:
-                    QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open file:\n{str(e)}")
-                    active_sub.close()
-            else:
-                 QtWidgets.QMessageBox.critical(self, "Error", "Failed to create new project window.")
+            if not project_data:
+                QtWidgets.QMessageBox.critical(
+                    self, 
+                    "Error", 
+                    "Failed to create project on server."
+                )
+                return False
+            
+            # Set global state
+            app_state.current_project_id = project_data.get("id")
+            app_state.current_project_name = project_data.get("name")
+            
+            # Create canvas WITHOUT loading backend state
+            canvas = CanvasWidget(self)
+            canvas.update_canvas_theme()
+            canvas.project_id = app_state.current_project_id
+            canvas.project_name = app_state.current_project_name
+            canvas._is_loading = True  # Block auto-save
 
-        # Image File -> Image Viewer Tab
+            # Treat imported project as NEW (delete if discarded) ---
+            canvas.is_new_project = True
+            
+            # Load from .pfd file
+            try:
+                if not canvas.open_file(filename):
+                    canvas._is_loading = False
+                    QtWidgets.QMessageBox.warning(self, "Error", "Failed to load file.")
+                    return False
+            except Exception as e:
+                canvas._is_loading = False
+                QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open file:\n{str(e)}")
+                return False
+            
+            canvas._is_loading = False
+            canvas.undo_stack.setClean()  # ✅ Mark as saved
+            
+            # ✅ Setup UI (THIS WAS MISSING!)
+            scroll = QtWidgets.QScrollArea()
+            scroll.setWidget(canvas)
+            scroll.setWidgetResizable(False)
+            scroll.setAlignment(Qt.AlignCenter)
+            scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+            overlay = OverlayContainer(canvas, scroll)
+
+            sub = CanvasSubWindow()
+            sub.setWidget(overlay)
+            sub.setAttribute(Qt.WA_DeleteOnClose)
+            self.mdi_area.addSubWindow(sub)
+            sub.setWindowTitle(f"{canvas.project_name} - {os.path.basename(filename)}")
+            sub.showMaximized()
+
         elif filename.lower().endswith((".png", ".jpg", ".jpeg")):
             sub = ImageSubWindow(filename)
             self.mdi_area.addSubWindow(sub)
             sub.setWindowTitle(f"Image - {os.path.basename(filename)}")
             sub.showMaximized()
 
-        # PDF File -> PDF Launcher Tab
         elif filename.lower().endswith(".pdf"):
             sub = PDFSubWindow(filename)
             self.mdi_area.addSubWindow(sub)
@@ -620,13 +732,3 @@ class CanvasScreen(QMainWindow):
         app_state.refresh_token = None
         app_state.current_user = None
         slide_to_index(0, direction=-1)
-
-    def open_add_symbol_dialog(self):
-        from src.add_symbol_dialog import AddSymbolDialog
-        
-        # CHANGED: Explicitly pass the current theme from the library
-        current_theme = self.library.current_library_theme
-        
-        dlg = AddSymbolDialog(self, theme=current_theme)
-        if dlg.exec_() == QtWidgets.QDialog.Accepted:
-            self.library.reload_components()

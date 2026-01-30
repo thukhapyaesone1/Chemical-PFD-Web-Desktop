@@ -18,6 +18,9 @@ class AddSymbolDialog(QDialog):
         self.setMinimumWidth(480)
         self.setMinimumHeight(800)
 
+        # Store theme for child dialogs
+        self.current_theme = theme
+
         # Modern rounded popup
         # self.setStyleSheet("""
         #     QDialog {
@@ -280,7 +283,7 @@ class AddSymbolDialog(QDialog):
             QtWidgets.QMessageBox.warning(self, "No SVG", "Please select an SVG file first.")
             return
 
-        dlg = GripEditorDialog(self.svg_path, self)
+        dlg = GripEditorDialog(self.svg_path, self, theme=self.current_theme)
         if dlg.exec_() == QDialog.Accepted:
             grips_json = dlg.get_grips_json()
             self.grips.setText(grips_json)

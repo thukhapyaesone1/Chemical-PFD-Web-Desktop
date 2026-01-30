@@ -14,11 +14,12 @@ class DraggableGripItem(QtWidgets.QGraphicsEllipseItem):
     """A grip point that can be dragged, deleted, and shows its number"""
     
     def __init__(self, x, y, side, index, editor, radius=4):
-        super().__init__(x - radius, y - radius, 2*radius, 2*radius)
+        super().__init__(-radius, -radius, 2*radius, 2*radius)
         self.editor = editor
         self.index = index
         self.side = side
         self.radius = radius
+        self.setPos(x, y) #Set the absolute position in the scene
         self.center_x = x
         self.center_y = y
         
@@ -72,8 +73,8 @@ class DraggableGripItem(QtWidgets.QGraphicsEllipseItem):
         if change == QtWidgets.QGraphicsItem.ItemPositionChange:
             # Update the stored coordinates when moved
             new_pos = value
-            self.center_x = new_pos.x() + self.radius
-            self.center_y = new_pos.y() + self.radius
+            self.center_x = new_pos.x() 
+            self.center_y = new_pos.y() 
             
             # Auto-detect nearest edge
             if self.editor.auto_detect_edge:
@@ -93,7 +94,7 @@ class DraggableGripItem(QtWidgets.QGraphicsEllipseItem):
         return super().itemChange(change, value)
 
 class GripEditorDialog(QDialog):
-    def __init__(self, svg_path, parent=None):
+    def __init__(self, svg_path, parent=None, theme="light"):
         super().__init__(parent)
 
         self.setWindowTitle("Grip Editor")
@@ -309,6 +310,9 @@ class GripEditorDialog(QDialog):
         btn_row.addWidget(cancel_btn)
         
         main_layout.addLayout(btn_row)
+
+        # Apply theme at the end of init
+        self.apply_theme(theme)
 
         # ---------------- SHORTCUTS ----------------
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Z"), self, self.undo)
@@ -698,3 +702,110 @@ class AddSymbolDialog(QDialog):
         if dlg.exec_() == QDialog.Accepted:
             grips_json = dlg.get_grips_json()
             self.grips.setText(grips_json)
+
+    def apply_theme(self, theme):
+        """
+        Applies theme to the dialog elements.
+        """
+        if theme == "dark":
+            bg_main       = "#0f172a" 
+            text_main     = "#f8fafc"
+            
+            # Labels and Text
+            title_bg      = "#1e293b"
+            title_text    = "#f8fafc"
+            
+            # Buttons
+            btn_bg        = "#3a5073"
+            btn_border    = "#334155"
+            btn_text      = "#f8fafc"
+            btn_hover     = "#334155"
+            
+            save_bg       = "#3b82f6"
+            save_text     = "#ffffff"
+            
+            # Inputs/Splitter
+            input_bg      = "#1e293b" # For combo box etc
+            input_text    = "#ffffff"
+            input_border  = "#334155"
+            
+        else:
+            # Light Theme
+            bg_main       = "#fffaf5"
+            text_main     = "#3A2A20"
+            
+            title_bg      = "#f8f9fa"
+            title_text    = "#495057"
+            
+            btn_bg        = "#f4e8dc"
+            btn_border    = "#C97B5A"
+            btn_text      = "#3A2A20"
+            btn_hover     = "#ffffff"
+            
+            save_bg       = "#3b82f6"
+            save_text     = "#ffffff"
+            
+            input_bg      = "#ffffff"
+            input_text    = "#3A2A20"
+            input_border  = "#cccccc"
+
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {bg_main};
+                color: {text_main};
+            }}
+            QWidget {{
+                background-color: {bg_main};
+                color: {text_main};
+            }}
+            QLabel {{
+                color: {text_main};
+            }}
+            
+            /* Section Titles (Editor/Live Preview) */
+            QLabel {{
+                font-size: 13px; 
+            }}
+            
+            /* Buttons */
+            QPushButton {{
+                background-color: {btn_bg};
+                color: {btn_text};
+                border: 1px solid {btn_border};
+                padding: 6px 14px;
+                border-radius: 6px;
+            }}
+            QPushButton:hover {{
+                background-color: {btn_hover};
+            }}
+            QPushButton {{
+                background-color: {save_bg};
+                color: {save_text};
+                border: none;
+            }}
+            
+            /* Combo Box */
+            QComboBox {{
+                background-color: {input_bg};
+                color: {input_text};
+                border: 1px solid {input_border};
+                border-radius: 4px;
+                padding: 4px;
+            }}
+            
+            QMenuBar {{
+                background-color: {bg_main};
+                color: {text_main};
+            }}
+            QMenuBar::item:selected {{
+                background-color: {btn_hover};
+            }}
+            QMenu {{
+                background-color: {bg_main};
+                color: {text_main};
+                border: 1px solid {input_border};
+            }}
+            QMenu::item:selected {{
+                background-color: {btn_hover};
+            }}
+        """)

@@ -7,195 +7,263 @@ import {
 } from "react";
 
 import { ComponentItem } from "@/components/Canvas/types";
-import { componentsConfig as initialConfig } from "@/assets/config/items";
+import {
+  fetchComponents,
+  createComponent,
+  updateComponent as apiUpdateComponent,
+  deleteComponent as apiDeleteComponent,
+  type ComponentData,
+} from "@/utils/componentApi";
 
 interface ComponentContextType {
   components: Record<string, Record<string, ComponentItem>>;
-  addComponent: (category: string, component: ComponentItem) => void;
+  isLoading: boolean;
+  error: string | null;
+  addComponent: (category: string, component: ComponentItem) => Promise<void>;
   updateComponent: (
     oldCategory: string,
     oldName: string,
     newCategory: string,
     newComponent: ComponentItem,
-  ) => void;
-  deleteComponent: (category: string, name: string) => void;
+  ) => Promise<void>;
+  deleteComponent: (category: string, name: string) => Promise<void>;
+  refreshComponents: () => Promise<void>;
 }
 
 const ComponentContext = createContext<ComponentContextType | undefined>(
   undefined,
 );
 
+// Convert backend ComponentData to frontend ComponentItem format
+function convertToComponentItem(data: ComponentData): ComponentItem {
+  return {
+    id: data.id ?? 0,
+    name: data.name,
+    icon: data.png_url || data.svg_url || "",
+    svg: data.svg_url || "",
+    png: data.png_url,
+    class: data.parent, // category
+    object: data.object,
+    args: [],
+    grips: data.grips,
+    legend: data.legend,
+    suffix: data.suffix,
+    isCustom: false, // Not needed anymore since all are user-created
+  };
+}
+
+// Convert ComponentData array to categorized component structure
+function categorizeComponents(components: ComponentData[]): Record<string, Record<string, ComponentItem>> {
+  const categorized: Record<string, Record<string, ComponentItem>> = {};
+
+  components.forEach((comp) => {
+    const category = comp.parent || "Uncategorized";
+    if (!categorized[category]) {
+      categorized[category] = {};
+    }
+    categorized[category][comp.name] = convertToComponentItem(comp);
+  });
+
+  return categorized;
+}
+
+// Convert base64 data URL to File object
+function dataURLtoFile(dataurl: string, filename: string): File {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/octet-stream';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], filename, { type: mime });
+}
+
 export const ComponentProvider = ({ children }: { children: ReactNode }) => {
   const [components, setComponents] =
-    useState<Record<string, Record<string, ComponentItem>>>(initialConfig);
+    useState<Record<string, Record<string, ComponentItem>>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load from local storage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem("custom_components");
-
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Merge saved components into initial config
-        // We do a deep merge logic here to ensure we don't overwrite standard ones unnecessarily
-        // but also allow mapped additions. For simplicity, we'll append to categories.
-
-        setComponents((prev) => {
-          const next = { ...prev };
-
-          Object.keys(parsed).forEach((cat) => {
-            if (!next[cat]) next[cat] = {};
-            // Ensure all loaded custom components have the flag
-            const migratedItems = Object.entries(
-              parsed[cat] as Record<string, ComponentItem>,
-            ).reduce(
-              (acc, [key, item]) => {
-                acc[key] = { ...item, isCustom: true };
-
-                return acc;
-              },
-              {} as Record<string, ComponentItem>,
-            );
-
-            next[cat] = { ...next[cat], ...migratedItems };
-          });
-
-          return next;
-        });
-      } catch (e) {
-        console.error("Failed to load components", e);
+  // Fetch components from backend on mount
+  const refreshComponents = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await fetchComponents();
+      const categorized = categorizeComponents(data);
+      setComponents(categorized);
+    } catch (err: any) {
+      console.error("Failed to fetch components:", err);
+      // Only set error for actual failures, not for empty lists
+      if (err.response?.status !== 404) {
+        setError(err.response?.data?.detail || err.message || "Failed to load components");
       }
+      // Set empty components on error
+      setComponents({});
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
+    refreshComponents();
   }, []);
 
-  const addComponent = (category: string, component: ComponentItem) => {
-    setComponents((prev) => {
-      const componentWithFlag = { ...component, isCustom: true };
-      const updated = {
-        ...prev,
-        [category]: {
-          ...(prev[category] || {}),
-          [component.name]: componentWithFlag,
-        },
-      };
+  const addComponent = async (category: string, component: ComponentItem) => {
+    try {
+      setError(null);
 
-      try {
-        const currentSaved = JSON.parse(
-          localStorage.getItem("custom_components") || "{}",
-        );
+      // Convert data URLs to File objects if needed
+      let svgFile: File | undefined;
+      let pngFile: File | undefined;
 
-        if (!currentSaved[category]) currentSaved[category] = {};
-        currentSaved[category][component.name] = componentWithFlag;
-        localStorage.setItem("custom_components", JSON.stringify(currentSaved));
-      } catch (e) {
-        console.error("Failed to save component", e);
+      if (component.svg && typeof component.svg === 'string' && component.svg.startsWith('data:')) {
+        svgFile = dataURLtoFile(component.svg, `${component.name}.svg`);
+      }
+      if (component.icon && typeof component.icon === 'string' && component.icon.startsWith('data:')) {
+        pngFile = dataURLtoFile(component.icon, `${component.name}.png`);
       }
 
-      return updated;
-    });
+      const created = await createComponent({
+        name: component.name,
+        parent: category,
+        legend: component.legend || "",
+        suffix: component.suffix || "",
+        object: component.object || component.name.replace(/\s+/g, ""),
+        grips: component.grips || [],
+        svg: svgFile,
+        png: pngFile,
+      });
+
+      // Update local state
+      setComponents((prev) => {
+        const updated = { ...prev };
+        if (!updated[category]) {
+          updated[category] = {};
+        }
+        updated[category][created.name] = convertToComponentItem(created);
+        return updated;
+      });
+    } catch (err: any) {
+      console.error("Failed to create component:", err);
+      setError(err.message || "Failed to create component");
+      throw err;
+    }
   };
 
-  const deleteComponent = (category: string, name: string) => {
-    setComponents((prev) => {
-      const next = { ...prev };
+  const deleteComponent = async (category: string, name: string) => {
+    try {
+      setError(null);
 
-      if (next[category]) {
-        const { [name]: deleted, ...rest } = next[category];
-
-        next[category] = rest;
-
-        // If category empty, maybe remove it? Keeping structure simple for now.
-        if (Object.keys(next[category]).length === 0) {
-          // Optionally delete category key if empty, but standard categories should stay.
-        }
+      // Find component ID
+      const comp = components[category]?.[name];
+      if (!comp || !comp.id) {
+        throw new Error("Component not found");
       }
 
-      try {
-        const currentSaved = JSON.parse(
-          localStorage.getItem("custom_components") || "{}",
-        );
+      await apiDeleteComponent(comp.id);
 
-        if (currentSaved[category]) {
-          delete currentSaved[category][name];
-          if (Object.keys(currentSaved[category]).length === 0) {
-            delete currentSaved[category];
+      // Update local state
+      setComponents((prev) => {
+        const updated = { ...prev };
+        if (updated[category]) {
+          const { [name]: deleted, ...rest } = updated[category];
+          updated[category] = rest;
+
+          // Remove category if empty
+          if (Object.keys(updated[category]).length === 0) {
+            delete updated[category];
           }
-          localStorage.setItem(
-            "custom_components",
-            JSON.stringify(currentSaved),
-          );
         }
-      } catch (e) {
-        console.error("Failed to delete component", e);
-      }
-
-      return next;
-    });
+        return updated;
+      });
+    } catch (err: any) {
+      console.error("Failed to delete component:", err);
+      setError(err.message || "Failed to delete component");
+      throw err;
+    }
   };
 
-  const updateComponent = (
+  const updateComponent = async (
     oldCategory: string,
     oldName: string,
     newCategory: string,
     newComponent: ComponentItem,
   ) => {
-    // Atomic update: Delete old -> Add new
-    // We do this to handle category changes or name changes easily
+    try {
+      setError(null);
 
-    // 1. Delete Logic
-    setComponents((prev) => {
-      // We need to return the final state, so we can't just call deleteComponent() inside setComponents
-      // because deleteComponent is async state update relative to this render cycle.
-      // So we implement logic inline or chain it.
-      // Easier approach: Just modify the 'prev' here for both steps.
-
-      let next = { ...prev };
-
-      // Remove Old
-      if (next[oldCategory]) {
-        const { [oldName]: deleted, ...rest } = next[oldCategory];
-
-        next[oldCategory] = rest;
+      // Find component ID
+      const comp = components[oldCategory]?.[oldName];
+      if (!comp || !comp.id) {
+        throw new Error("Component not found");
       }
 
-      // Add New (with isCustom flag guaranteed)
-      const componentWithFlag = { ...newComponent, isCustom: true };
+      // Convert data URLs to File objects if needed
+      let svgFile: File | undefined;
+      let pngFile: File | undefined;
 
-      if (!next[newCategory]) next[newCategory] = {};
-      next[newCategory] = {
-        ...next[newCategory],
-        [newComponent.name]: componentWithFlag,
-      };
+      if (newComponent.svg && typeof newComponent.svg === 'string' && newComponent.svg.startsWith('data:')) {
+        svgFile = dataURLtoFile(newComponent.svg, `${newComponent.name}.svg`);
+      }
+      if (newComponent.icon && typeof newComponent.icon === 'string' && newComponent.icon.startsWith('data:')) {
+        pngFile = dataURLtoFile(newComponent.icon, `${newComponent.name}.png`);
+      }
 
-      // Persist (Mirror logic)
-      try {
-        const currentSaved = JSON.parse(
-          localStorage.getItem("custom_components") || "{}",
-        );
+      const updated = await apiUpdateComponent(comp.id, {
+        name: newComponent.name,
+        parent: newCategory,
+        legend: newComponent.legend,
+        suffix: newComponent.suffix,
+        object: newComponent.object || newComponent.name.replace(/\s+/g, ""),
+        grips: newComponent.grips,
+        svg: svgFile,
+        png: pngFile,
+      });
 
-        // Delete Old
-        if (currentSaved[oldCategory]) {
-          delete currentSaved[oldCategory][oldName];
-          if (Object.keys(currentSaved[oldCategory]).length === 0)
-            delete currentSaved[oldCategory];
+      // Update local state
+      setComponents((prev) => {
+        const next = { ...prev };
+
+        // Remove from old category
+        if (next[oldCategory]) {
+          const { [oldName]: deleted, ...rest } = next[oldCategory];
+          next[oldCategory] = rest;
+
+          // Remove old category if empty
+          if (Object.keys(next[oldCategory]).length === 0) {
+            delete next[oldCategory];
+          }
         }
 
-        // Add New
-        if (!currentSaved[newCategory]) currentSaved[newCategory] = {};
-        currentSaved[newCategory][newComponent.name] = componentWithFlag;
+        // Add to new category
+        if (!next[newCategory]) {
+          next[newCategory] = {};
+        }
+        next[newCategory][updated.name] = convertToComponentItem(updated);
 
-        localStorage.setItem("custom_components", JSON.stringify(currentSaved));
-      } catch (e) {
-        console.error("Failed to update component", e);
-      }
-
-      return next;
-    });
+        return next;
+      });
+    } catch (err: any) {
+      console.error("Failed to update component:", err);
+      setError(err.message || "Failed to update component");
+      throw err;
+    }
   };
 
   return (
     <ComponentContext.Provider
-      value={{ components, addComponent, updateComponent, deleteComponent }}
+      value={{
+        components,
+        isLoading,
+        error,
+        addComponent,
+        updateComponent,
+        deleteComponent,
+        refreshComponents,
+      }}
     >
       {children}
     </ComponentContext.Provider>

@@ -36,32 +36,23 @@ import {
   createProject,
   deleteProject,
   updateProjectMeta,
+  type ApiProject,
 } from "@/api/projectApi";
-import { SavedProject } from "@/utils/projectStorage";
+// import { SavedProject } from "@/utils/projectStorage"; // Unused import removed
 
-export interface Project {
-  id: number;
-  name: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  canvas_state?: {
-    items?: any[];
-  };
-}
 export default function Dashboard() {
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("recent");
   const [sizeFilter, setSizeFilter] = useState("all");
-  const [projects, setProjects] = useState<SavedProject[]>(() => []);
+  const [projects, setProjects] = useState<ApiProject[]>(() => []);
 
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
-  const [editingProject, setEditingProject] = useState<SavedProject | null>(
+  const [editingProject, setEditingProject] = useState<ApiProject | null>(
     null,
   );
-  const [deletingProject, setDeletingProject] = useState<SavedProject | null>(
+  const [deletingProject, setDeletingProject] = useState<ApiProject | null>(
     null,
   );
   const [editName, setEditName] = useState("");
@@ -95,7 +86,7 @@ export default function Dashboard() {
   //   navigate(`/editor/${newProject.id}`);
   // };
 
-  const handleEditProject = (project: SavedProject) => {
+  const handleEditProject = (project: ApiProject) => {
     setEditingProject(project);
     setEditName(project.name);
     setEditDescription(project.description || "");
@@ -117,7 +108,7 @@ export default function Dashboard() {
   //   setEditingProject(null);
   // };
 
-  const handleDeleteProject = (project: SavedProject) => {
+  const handleDeleteProject = (project: ApiProject) => {
     setDeletingProject(project);
   };
 
@@ -185,7 +176,7 @@ export default function Dashboard() {
   };
 
   // Get project status based on item count
-  const getProjectStatus = (project: SavedProject) => {
+  const getProjectStatus = (project: ApiProject) => {
     const itemCount = project.canvas_state?.items?.length || 0;
 
     if (itemCount === 0) return "Draft";
@@ -194,23 +185,21 @@ export default function Dashboard() {
     return "Complete";
   };
 
-useEffect(() => {
-  fetchProjects()
-    .then((data) => {
-      if (Array.isArray(data)) {
-        setProjects(data);
-      } else if (Array.isArray(data?.projects)) {
-        setProjects(data.projects);
-      } else {
-        console.error("Invalid projects API response:", data);
+  useEffect(() => {
+    fetchProjects()
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setProjects(data);
+        } else {
+          console.error("Invalid projects API response:", data);
+          setProjects([]);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch projects:", err);
         setProjects([]);
-      }
-    })
-    .catch((err) => {
-      console.error("Failed to fetch projects:", err);
-      setProjects([]);
-    });
-}, []);
+      });
+  }, []);
 
 
   const handleCreateNewProject = async (name: string, description: string) => {
