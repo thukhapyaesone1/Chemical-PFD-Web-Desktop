@@ -25,7 +25,7 @@ class ProjectAdmin(admin.ModelAdmin):
 # -----------------------------
 @admin.register(Component)
 class ComponentAdmin(admin.ModelAdmin):
-    list_display = ("id", "name")
+    list_display = ("id","s_no", "name")
 
     def get_urls(self):
         urls = super().get_urls()
