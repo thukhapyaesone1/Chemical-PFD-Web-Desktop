@@ -35,7 +35,7 @@ import {
 import { calculateManualPathsWithBridges } from "@/utils/routing";
 import { useComponents } from "@/context/ComponentContext";
 import ExportModal from "@/components/Canvas/ExportModal";
-import { exportDiagram, downloadBlob } from "@/utils/exports";
+// import { exportDiagram, downloadBlob } from "@/utils/exports";
 import { ExportOptions } from "@/components/Canvas/types";
 import { useEditorStore } from "@/store/useEditorStore";
 import {
@@ -389,14 +389,18 @@ export default function Editor() {
               return;
             }
 
-            // Already loaded
-            if (img.complete && img.naturalWidth > 0) {
+            // Check if it is an HTMLImageElement
+            if (img instanceof HTMLImageElement) {
+              if (img.complete && img.naturalWidth > 0) {
+                resolve();
+                return;
+              }
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+            } else {
+              // For other types (Canvas, ImageBitmap), assume ready
               resolve();
-              return;
             }
-
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
           }),
       ),
     );
@@ -540,7 +544,7 @@ export default function Editor() {
         if (!options.includeGrid) {
           clonedLayer
             .find(".grid-line, .grid-shape")
-            .forEach((node) => node.destroy());
+            .forEach((node: Konva.Node) => node.destroy());
         }
 
         tempStage.add(clonedLayer);
@@ -1236,7 +1240,12 @@ export default function Editor() {
     }
 
     // Multi-drag support
+    // Only apply multi-drag if we are moving (x/y change) but NOT resizing (width/height change)
+    // This prevents resizing updates from being swallowed by the batch update which only tracks x/y.
+    const isResizing = updates.width !== undefined || updates.height !== undefined;
+
     if (
+      !isResizing &&
       selectedItemIds.has(itemId) &&
       (snappedUpdates.x !== undefined || snappedUpdates.y !== undefined)
     ) {

@@ -36,7 +36,7 @@ export const CanvasItemImage = ({
       trRef.current.nodes([groupRef.current]);
       trRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected]);
+  }, [isSelected, item.width, item.height, item.x, item.y, item.rotation]);
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     const updatedItem = {
@@ -64,8 +64,8 @@ export const CanvasItemImage = ({
       ...item,
       x: node.x(),
       y: node.y(),
-      width: Math.max(5, item.width * scaleX),
-      height: Math.max(5, item.height * scaleY),
+      width: Math.max(5, item.width * Math.abs(scaleX)),
+      height: Math.max(5, item.height * Math.abs(scaleY)),
       rotation: node.rotation(),
     };
 
@@ -89,18 +89,56 @@ export const CanvasItemImage = ({
         width={item.width}
         x={item.x}
         y={item.y}
+        scaleX={1}
+        scaleY={1}
         onDragEnd={handleDragEnd}
         onTransformEnd={handleTransformEnd}
       >
-        <KonvaImage
-          height={item.height}
-          image={image}
-          width={item.width}
-          x={0}
-          y={0}
-          onClick={(e) => onSelect(e as any)}
-          onTap={(e) => onSelect(e as any)}
-        />
+        {(() => {
+          // Calculate aspect-fit dimensions
+          if (!image) {
+            // Fallback if image not loaded yet
+            return <KonvaImage image={undefined} width={item.width} height={item.height} />;
+          }
+
+          const imgWidth = image.naturalWidth || item.width;
+          const imgHeight = image.naturalHeight || item.height;
+
+          if (imgWidth === 0 || imgHeight === 0) return null;
+
+          const aspectRatio = imgWidth / imgHeight;
+          const containerRatio = item.width / item.height;
+
+          let renderWidth = item.width;
+          let renderHeight = item.height;
+          let renderX = 0;
+          let renderY = 0;
+
+          if (containerRatio > aspectRatio) {
+            // Container is wider than image -> fit height
+            renderHeight = item.height;
+            renderWidth = renderHeight * aspectRatio;
+            renderX = (item.width - renderWidth) / 2;
+          } else {
+            // Container is taller/narrower -> fit width
+            renderWidth = item.width;
+            renderHeight = renderWidth / aspectRatio;
+            renderY = (item.height - renderHeight) / 2;
+          }
+
+          return (
+            <KonvaImage
+              height={renderHeight}
+              image={image}
+              width={renderWidth}
+              x={renderX}
+              y={renderY}
+              onClick={(e) => onSelect(e as any)}
+              onTap={(e) => onSelect(e as any)}
+            />
+          );
+        })()}
+
       </Group>
 
       {/* ================= LABEL (Visual Only, Behind Everything) ================= */}
@@ -112,28 +150,30 @@ export const CanvasItemImage = ({
         fontSize={12}
         listening={false}
         text={labelText}
-        width={150}
+        width={item.width + 100} // Increase width to prevent wrapping
         x={labelX + item.width / 2}
         y={labelY + 2}
-        offsetX={75}
+        offsetX={(item.width + 100) / 2} // Center align
       />
 
       {/* ================= TRANSFORMER ================= */}
       {isSelected && (
         <Transformer
           ref={trRef}
+          rotateEnabled={false} // Disable rotation
+          keepRatio={true} // Enforce aspect ratio scaling
+          flipEnabled={false} // Disable flipping to prevent negative scale issues
           enabledAnchors={[
             'top-left',
             'top-right',
             'bottom-left',
             'bottom-right',
           ]}
-          keepRatio={true}
           boundBoxFunc={(oldBox, newBox) => {
-            if (newBox.width < 5 || newBox.height < 5) {
+            // Prevent shrinking too small
+            if (newBox.width < 10 || newBox.height < 10) {
               return oldBox;
             }
-
             return newBox;
           }}
         />
