@@ -29,12 +29,20 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 
 class ComponentSerializer(serializers.ModelSerializer):
-    svg_url = serializers.SerializerMethodField()
-    png_url = serializers.SerializerMethodField()
-    
     class Meta:
         model = Component
-        fields = '__all__'
+        fields = [
+            'id',
+            's_no',
+            'name',
+            'legend',
+            'suffix',
+            'object',
+            'svg',
+            'png',
+            'grips',
+            'created_by',
+        ]
     
     def to_internal_value(self, data):
         # Convert QueryDict to standard dict to handle JSON parsing correctly
@@ -54,22 +62,6 @@ class ComponentSerializer(serializers.ModelSerializer):
                 })
 
         return super().to_internal_value(data)
-    
-    def get_svg_url(self, obj):
-        request = self.context.get('request')
-        if obj.svg and hasattr(obj.svg, 'url'):
-            if request:
-                return request.build_absolute_uri(obj.svg.url)
-            return obj.svg.url
-        return None
-    
-    def get_png_url(self, obj):
-        request = self.context.get('request')
-        if obj.png and hasattr(obj.png, 'url'):
-            if request:
-                return request.build_absolute_uri(obj.png.url)
-            return obj.png.url
-        return None
 class CanvasStateSerializer(serializers.ModelSerializer):
     # Component fields (flattened)
     component_id = serializers.IntegerField(source="component.id", read_only=True)
