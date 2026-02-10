@@ -311,8 +311,9 @@ class ComponentLibrary(QWidget):
 
     def _sync_components_with_backend(self):
         """
-        Fetch components from backend, append new ones to CSV,
-        and download PNG/SVG exactly as backend provides.
+        Fetch components from backend and sync with local CSV.
+        Updates existing components and appends new ones.
+        Downloads PNG/SVG assets if missing.
         """
         try:
             api_components = api_client.get_components()
@@ -320,83 +321,60 @@ class ComponentLibrary(QWidget):
                 return
 
             csv_path = os.path.join("ui", "assets", "Component_Details.csv")
-
-            # Get existing S. No list
-            existing = set()
+            
+            # 1. Read existing CSV data
+            existing_data = {}
+            fieldnames = ["s_no", "parent", "name", "legend", "suffix", "object", "svg", "png", "grips"]
+            
             if os.path.exists(csv_path):
-                with open(csv_path, "r", encoding="utf-8-sig") as f:
-                    for r in csv.DictReader(f):
-                        if r.get("s_no"):
-                            existing.add(r["s_no"].strip())
+                try:
+                    with open(csv_path, "r", encoding="utf-8-sig") as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            s_no = row.get("s_no", "").strip()
+                            if s_no:
+                                existing_data[s_no] = row
+                except Exception as e:
+                    print(f"[SYNC ERROR] Failed to read CSV: {e}")
 
-            new_rows = []
-
+            updated_rows = []
+            
+            # 2. Process API components
             for comp in api_components:
                 s_no = str(comp.get("s_no", "")).strip()
-                if not s_no or s_no in existing:
+                if not s_no:
                     continue
 
-                # print(f"[SYNC] NEW component detected: s_no={s_no}, name={comp.get('name')}")
-
+                # Prepare component data
                 parent = comp.get("parent", "").strip()
                 name = comp.get("name", "").strip()
                 obj = comp.get("object", "").strip()
-
+                
+                # Image URLs
                 png_url = comp.get("png_url") or comp.get("png")
                 svg_url = comp.get("svg_url") or comp.get("svg")
 
-                # Prepare folders
+                # Prepare filenames (fallback to existing if not provided)
+                png_filename = os.path.basename(png_url) if png_url else ""
+                svg_filename = os.path.basename(svg_url) if svg_url else ""
+
+                # --- Asset Downloading ---
                 parent_folder = self.FOLDER_MAP.get(parent, parent)
-                png_dir = os.path.join("ui", "assets", "png", parent_folder)
-                svg_dir = os.path.join("ui", "assets", "svg", parent_folder)
-                os.makedirs(png_dir, exist_ok=True)
-                os.makedirs(svg_dir, exist_ok=True)
-
-                png_filename = ""
-                svg_filename = ""
-
-                # --- Download PNG ---
-                if png_url:
-                    if not png_url.startswith("http"):
-                        png_url = f"{app_state.BACKEND_BASE_URL}{png_url}"
-
-                    png_filename = os.path.basename(png_url)
-                    png_path = os.path.join(png_dir, png_filename)
-
-                    try:
-                        res = requests.get(png_url, timeout=5)
-                        if res.status_code == 200:
-                            with open(png_path, "wb") as f:
-                                f.write(res.content)
-                            # print(f"[SYNC] PNG saved → {png_path}")
-                        else:
-                            print("[SYNC] PNG download failed:", png_url)
-                    except Exception as e:
-                        print("[SYNC ERROR] PNG failed:", e)
-
-                # --- Download SVG ---
-                if svg_url:
-                    if not svg_url.startswith("http"):
-                        svg_url = f"{app_state.BACKEND_BASE_URL}{svg_url}"
-
-                    svg_filename = os.path.basename(svg_url)
-                    svg_path = os.path.join(svg_dir, svg_filename)
-
-                    try:
-                        res = requests.get(svg_url, timeout=5)
-                        if res.status_code == 200:
-                            with open(svg_path, "wb") as f:
-                                f.write(res.content)
-                            # print(f"[SYNC] SVG saved → {svg_path}")
-                    except Exception as e:
-                        print("[SYNC ERROR] SVG failed:", e)
-
-                # Add to new_snos set
-                self.new_snos.add(s_no)
-                # print(f"[SYNC] Added s_no={s_no} to new_snos set")
                 
-                # CSV row with exact backend filenames
-                new_rows.append({   
+                if png_url and png_filename:
+                    self._download_asset(png_url, png_filename, "png", parent_folder)
+                
+                if svg_url and svg_filename:
+                    self._download_asset(svg_url, svg_filename, "svg", parent_folder)
+
+                # --- Update/Create Record ---
+                # Check if this is a NEW component (not in existing CSV)
+                if s_no not in existing_data:
+                    self.new_snos.add(s_no)
+                    # print(f"[SYNC] New component detected: {name} ({s_no})")
+
+                # Merge with existing data (backend takes precedence)
+                row_data = {
                     "s_no": s_no,
                     "parent": parent,
                     "name": name,
@@ -406,29 +384,55 @@ class ComponentLibrary(QWidget):
                     "svg": svg_filename,
                     "png": png_filename,
                     "grips": comp.get("grips", "")
-                })
+                }
+                
+                # Update our map
+                existing_data[s_no] = row_data
 
-            # Append to CSV
-            if new_rows:
-                file_exists = os.path.exists(csv_path)
+            # 3. Write back to CSV (Re-write entire file to reflect updates)
+            # Sort by s_no for consistency if numeric, else string
+            try:
+                sorted_rows = sorted(existing_data.values(), key=lambda x: int(x['s_no']) if x['s_no'].isdigit() else x['s_no'])
+            except:
+                sorted_rows = list(existing_data.values())
 
-                with open(csv_path, "a", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f, fieldnames=[
-                        "s_no", "parent", "name", "legend", "suffix",
-                        "object", "svg", "png", "grips"
-                    ])
-
-                    if not file_exists:
-                        writer.writeheader()
-
-                    for r in new_rows:
-                        writer.writerow(r)
-
-                # print(f"[SYNC] Added {len(new_rows)} new components to CSV.")
-                # print(f"[SYNC] new_snos now contains: {self.new_snos}")
+            try:
+                with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(sorted_rows)
+                    
+            except Exception as e:
+                print(f"[SYNC ERROR] Failed to write CSV: {e}")
 
         except Exception as e:
             print("[SYNC CRITICAL ERROR]", e)
+
+    def _download_asset(self, url, filename, asset_type, parent_folder):
+        """Helper to download assets if missing."""
+        try:
+            if not url:
+                return
+
+            if not url.startswith("http"):
+                url = f"{app_state.BACKEND_BASE_URL}{url}"
+
+            target_dir = os.path.join("ui", "assets", asset_type, parent_folder)
+            os.makedirs(target_dir, exist_ok=True)
+            target_path = os.path.join(target_dir, filename)
+
+            # Only download if missing 
+            # (Optimization: We could check file size or headers, but 'exists' is safe for now)
+            if not os.path.exists(target_path):
+                res = requests.get(url, timeout=5)
+                if res.status_code == 200:
+                    with open(target_path, "wb") as f:
+                        f.write(res.content)
+                    # print(f"[SYNC] Downloaded {asset_type}: {filename}")
+                else:
+                    print(f"[SYNC WARNING] Failed to download {url} ({res.status_code})")
+        except Exception as e:
+            print(f"[SYNC ERROR] Failed to download asset {filename}: {e}")
 
 
     def _populate_icons(self):
