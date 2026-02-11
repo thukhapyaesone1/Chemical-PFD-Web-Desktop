@@ -8,3 +8,5 @@ sqlparse==0.5.4
 typing_extensions==4.15.0
 tzdata==2025.2
 pillow==12.1.0
+gunicorn==25.0.3
+psycopg2-binary==2.9.9
