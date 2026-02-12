@@ -12,6 +12,8 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QFrame, QSizePolicy,
     QScrollArea, QLabel, QToolButton, QGridLayout, QLabel, QApplication, QGraphicsOpacityEffect, QHBoxLayout
 )
+import threading
+import time
 
 class FunctionEvent(QEvent):
     EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
@@ -168,7 +170,9 @@ class ComponentButton(QToolButton):
             "parent": self.component_data.get('parent', ''),
             "legend": self.component_data.get('legend', ''),
             "suffix": self.component_data.get('suffix', ''),
-            "grips": self.component_data.get('grips', '')
+            "grips": self.component_data.get('grips', ''),
+            "svg": self.component_data.get('svg', ''),
+            "png": self.component_data.get('png', '')
         })
         mimeData.setText(component_json)
         drag.setMimeData(mimeData)
@@ -234,8 +238,15 @@ class ComponentLibrary(QWidget):
         self.theme_toggle.setStyleSheet("border: none; background: transparent; font-size: 14px;")
         self.theme_toggle.clicked.connect(self.toggle_theme)
         
+        self.sync_btn = QToolButton()
+        self.sync_btn.setText("Sync")
+        self.sync_btn.setCursor(Qt.PointingHandCursor)
+        self.sync_btn.clicked.connect(self.reload_components)
+        self.sync_btn.setStyleSheet("border: none; background: transparent; font-size: 12px; color: #666;")
+
         header_layout.addWidget(title)
         header_layout.addStretch()
+        header_layout.addWidget(self.sync_btn)
         header_layout.addWidget(self.theme_toggle)
         
         main_layout.addWidget(header_widget)
@@ -276,134 +287,130 @@ class ComponentLibrary(QWidget):
         self.loader_label.setVisible(False)
 
     def _load_components(self):
-        csv_path = os.path.join("ui", "assets", "Component_Details.csv")
+        """Load components from local JSON cache."""
+        cache_path = os.path.join("ui", "assets", "components_cache.json")
         
-        if not os.path.exists(csv_path):
+        self.component_data.clear()
+        
+        if not os.path.exists(cache_path):
+            # Try loading from legacy CSV if JSON doesn't exist (migration path)
+            csv_path = os.path.join("ui", "assets", "Component_Details.csv")
+            if os.path.exists(csv_path):
+                self._load_from_legacy_csv(csv_path)
             return
-        
-        # print(f"[LOAD] new_snos set contains: {self.new_snos}")
-        
+
+        try:
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            for comp in data:
+                # Ensure all required fields exist
+                s_no = str(comp.get("s_no", "")).strip()
+                if not s_no: continue
+                
+                is_new = s_no in self.new_snos
+                comp["is_new"] = is_new
+                self.component_data.append(comp)
+                
+        except Exception as e:
+            print(f"[LOAD ERROR] Failed to load cache: {e}")
+
+    def _load_from_legacy_csv(self, csv_path):
         try:
             with open(csv_path, 'r', encoding='utf-8-sig') as file:
                 reader = csv.DictReader(file)
                 for row in reader:
                     if row['parent'] and row['name']:
-                        s_no = row.get("s_no", "").strip()
-                        is_new = s_no in self.new_snos
-                        
-                        # if is_new:
-                        #     print(f"[LOAD] Found NEW component: {row['name']} with s_no={s_no}")
-                        
-                        self.component_data.append({
-                            "s_no": s_no,
-                            "parent": row.get("parent", "").strip(),
-                            "name": row.get("name", "").strip(),
-                            "legend": row.get("legend", "").strip(),
-                            "suffix": row.get("suffix", "").strip(),
-                            "object": row.get("object", "").strip(),
-                            "svg": row.get("svg", "").strip(),
-                            "png": row.get("png", "").strip(),
-                            "grips": row.get("grips", "").strip(),
-                            "is_new": is_new
-                        })
-        except Exception as e:
-            print(f"Error loading components: {e}")
+                        self.component_data.append(row)
+        except Exception:
+            pass
 
     def _sync_components_with_backend(self):
         """
-        Fetch components from backend and sync with local CSV.
-        Updates existing components and appends new ones.
-        Downloads PNG/SVG assets if missing.
+        Fetch components from backend and update local JSON cache.
         """
         try:
             api_components = api_client.get_components()
             if not api_components:
-                return
+                print("[SYNC] No components received or API failed.")
+                return 
 
-            csv_path = os.path.join("ui", "assets", "Component_Details.csv")
+            cache_path = os.path.join("ui", "assets", "components_cache.json")
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
             
-            # 1. Read existing CSV data
-            existing_data = {}
-            fieldnames = ["s_no", "parent", "name", "legend", "suffix", "object", "svg", "png", "grips"]
-            
-            if os.path.exists(csv_path):
+            # Use a dict for easy lookup/merging
+            existing_map = {}
+            if os.path.exists(cache_path):
                 try:
-                    with open(csv_path, "r", encoding="utf-8-sig") as f:
-                        reader = csv.DictReader(f)
-                        for row in reader:
-                            s_no = row.get("s_no", "").strip()
-                            if s_no:
-                                existing_data[s_no] = row
-                except Exception as e:
-                    print(f"[SYNC ERROR] Failed to read CSV: {e}")
+                    with open(cache_path, "r", encoding="utf-8") as f:
+                        old_data = json.load(f)
+                        for item in old_data:
+                            existing_map[item.get("s_no")] = item
+                except:
+                    pass
 
-            updated_rows = []
-            
-            # 2. Process API components
+            processed_components = []
+
             for comp in api_components:
                 s_no = str(comp.get("s_no", "")).strip()
-                if not s_no:
-                    continue
+                if not s_no: continue
 
-                # Prepare component data
-                parent = comp.get("parent", "").strip()
-                name = comp.get("name", "").strip()
-                obj = comp.get("object", "").strip()
-                
-                # Image URLs
+                # Identify if new
+                if s_no not in existing_map:
+                    self.new_snos.add(s_no)
+
+                # Extract SVG/PNG filenames for local caching
                 png_url = comp.get("png_url") or comp.get("png")
                 svg_url = comp.get("svg_url") or comp.get("svg")
 
-                # Prepare filenames (fallback to existing if not provided)
                 png_filename = os.path.basename(png_url) if png_url else ""
                 svg_filename = os.path.basename(svg_url) if svg_url else ""
 
-                # --- Asset Downloading ---
+                parent = comp.get("parent", "").strip()
                 parent_folder = self.FOLDER_MAP.get(parent, parent)
-                
-                if png_url and png_filename:
+
+                # Download if missing
+                if png_url:
                     self._download_asset(png_url, png_filename, "png", parent_folder)
-                
-                if svg_url and svg_filename:
+                if svg_url:
                     self._download_asset(svg_url, svg_filename, "svg", parent_folder)
 
-                # --- Update/Create Record ---
-                # Check if this is a NEW component (not in existing CSV)
-                if s_no not in existing_data:
-                    self.new_snos.add(s_no)
-                    # print(f"[SYNC] New component detected: {name} ({s_no})")
-
-                # Merge with existing data (backend takes precedence)
-                row_data = {
+                # Create standardized record
+                record = {
                     "s_no": s_no,
                     "parent": parent,
-                    "name": name,
+                    "name": comp.get("name", "").strip(),
                     "legend": comp.get("legend", ""),
                     "suffix": comp.get("suffix", ""),
-                    "object": obj,
+                    "object": comp.get("object", "").strip(), 
                     "svg": svg_filename,
                     "png": png_filename,
                     "grips": comp.get("grips", "")
                 }
                 
-                # Update our map
-                existing_data[s_no] = row_data
+                # Check for updates? For now, we trust backend is truth.
+                processed_components.append(record)
+                existing_map[s_no] = record
 
-            # 3. Write back to CSV (Re-write entire file to reflect updates)
-            # Sort by s_no for consistency if numeric, else string
+            # Add back items from cache that might not be in API? 
+            # Ideally NO, backend is source of truth. Valid components should be in backend.
+            # But during dev, maybe we keep them? 
+            # Decision: Single Source of Truth means we only keep what API gives us.
+            # However, if API fails, we returned early above. 
+            # So here `api_components` is valid. We overwrite the cache with ONLY API data.
+            
+            final_list = processed_components
+            
+            # Sort
             try:
-                sorted_rows = sorted(existing_data.values(), key=lambda x: int(x['s_no']) if x['s_no'].isdigit() else x['s_no'])
+                final_list.sort(key=lambda x: int(x['s_no']) if x['s_no'].isdigit() else x['s_no'])
             except:
-                sorted_rows = list(existing_data.values())
+                pass
 
-            try:
-                with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                    writer.writeheader()
-                    writer.writerows(sorted_rows)
-                    
-            except Exception as e:
-                print(f"[SYNC ERROR] Failed to write CSV: {e}")
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(final_list, f, indent=2)
+                
+            print(f"[SYNC] Cache updated with {len(final_list)} components.")
 
         except Exception as e:
             print("[SYNC CRITICAL ERROR]", e)
@@ -555,22 +562,6 @@ class ComponentLibrary(QWidget):
         "Size Reduction Equipments": "Size Reduction Equipements"
     }
 
-    NAME_CORRECTIONS = {
-        "/": ", ",
-        "Furnance": "Furnace",
-        "Drier": "Dryer",
-        "Oil, Gas": "Oil Gas",
-        "Centrifugal Pumps": "Centrifugal Pump",
-        "Ejector (vapour service)": "Ejector(Vapor Service)",
-        "Plates, Trays (For mass Transfer)": "Trays or plates",
-        "Separators for Liquids, Decanters": "Separators for Liquids, Decanter"
-    }
-
-    PREFIXED_COMPONENTS = {
-        'Exchanger905': "905Exchanger",
-        'KettleReboiler907': "907Kettle Reboiler"
-    }
-
     def _get_icon_path(self, parent, name, obj=''):
         csv_row = None
         for c in self.component_data:
@@ -601,14 +592,7 @@ class ComponentLibrary(QWidget):
             except Exception as e:
                 print("[IMG FETCH ERROR]", e)
 
-        clean_name = obj and self.PREFIXED_COMPONENTS.get(obj)
-        if not clean_name:
-            clean_name = name
-            for old, new in self.NAME_CORRECTIONS.items():
-                clean_name = clean_name.replace(old, new)
-
-        fallback_path = os.path.join(local_dir, f"{clean_name}.png")
-        return fallback_path if os.path.exists(fallback_path) else ""
+        return ""
 
     
     def _filter_icons(self, search_text):

@@ -173,41 +173,99 @@ def load_canvas_from_project(canvas, project_data):
         # Load Components
         id_map = {}
         
+        try:
+            # Fetch latest component map for ID resolution
+            backend_components = get_components()
+            # Create ID -> Component Data map
+            # backend_components is a list of dicts
+            id_to_comp = {c.get("id"): c for c in backend_components if c.get("id")}
+        except Exception as e:
+            print(f"[LOAD] Failed to fetch components for ID lookup: {e}")
+            id_to_comp = {}
+
         for d in items_data:
             # Get component data from nested structure
             component_data = d.get("component", {})
             
-            # Try to find SVG path
-            s_no = d.get("s_no") or component_data.get("s_no", "")
-            name = d.get("name") or component_data.get("name", "")
-            svg_path = d.get("svg") or component_data.get("svg")
+            # --- RESOLUTION STRATEGY ---
+            # 1. Try to resolve by Component ID (Best for Web Projects & Consistency)
+            # 2. Key matching fallback
             
-            if not svg_path and name:
-                # Try to find SVG by name
+            comp_id = d.get("component_id") or component_data.get("id")
+            resolved_from_id = False
+            
+            s_no = ""
+            name = ""
+            svg_path = ""
+            
+            # Strategy 1: Look up by ID
+            if comp_id and comp_id in id_to_comp:
+                api_data = id_to_comp[comp_id]
+                name = api_data.get("name", "")
+                s_no = str(api_data.get("s_no", ""))
+                # Find local SVG for this name
                 svg_path = resources.find_svg_path(name, canvas.base_dir)
+                if svg_path:
+                    resolved_from_id = True
+                    # print(f"[LOAD] Resolved component {comp_id} ('{name}') from Library")
+            
+            # Strategy 2: Fallback to Project Data (with intelligent path fix)
+            if not resolved_from_id:
+                s_no = d.get("s_no") or component_data.get("s_no", "") or s_no
+                name = d.get("name") or component_data.get("name", "") or name
+                
+                raw_svg = d.get("svg") or component_data.get("svg")
+                if raw_svg:
+                    # Check if it's a URL or absolute path from another machine
+                    if "http" in raw_svg or "/" in raw_svg or "\\" in raw_svg:
+                        # Extract just the filename/basename
+                        base_name = os.path.basename(raw_svg)
+                        # Remove extension for fuzzy search
+                        search_name = os.path.splitext(base_name)[0]
+                        # Try to find local match
+                        found_path = resources.find_svg_path(search_name, canvas.base_dir)
+                        if found_path:
+                            svg_path = found_path
+                        elif os.path.exists(raw_svg):
+                            svg_path = raw_svg
+                    else:
+                         svg_path = raw_svg
+
+                # Last ditch: Try finding by name if SVG still missing
+                if not svg_path and name:
+                    svg_path = resources.find_svg_path(name, canvas.base_dir)
             
             if not svg_path:
-                print(f"[LOAD] No SVG path for component: {name}")
+                print(f"[LOAD] No SVG path found for component: {name} (ID: {comp_id})")
                 continue
             
-            # Resolve path if needed
+            # Validate existence
             if not os.path.exists(svg_path):
+                # Clean name search
                 found = resources.find_svg_path(name or os.path.basename(svg_path), canvas.base_dir)
                 if found:
                     svg_path = found
                 else:
-                    print(f"[LOAD] SVG not found for {name}")
+                    print(f"[LOAD] SVG file missing: {svg_path}")
                     continue
             
             # Build config from item data
+            # Include grips from best available source (critical for web-desktop sync)
+            grips_data = d.get("grips")                            # 1. Item data (web project)
+            if not grips_data and resolved_from_id:
+                grips_data = api_data.get("grips")                 # 2. API library
+            if not grips_data:
+                grips_data = component_data.get("grips")           # 3. Nested component data
+            
             config = {
                 "s_no": s_no,
                 "parent": d.get("parent") or component_data.get("parent", ""),
                 "name": name,
-                "object": d.get("object") or component_data.get("object", ""),
+                "object": d.get("object") or component_data.get("object", "") or name,
                 "legend": d.get("legend") or component_data.get("legend", ""),
                 "suffix": d.get("suffix") or component_data.get("suffix", ""),
-                "default_label": d.get("label", "")
+                "default_label": d.get("label", ""),
+                "grips": grips_data,
             }
             
             comp = ComponentWidget(svg_path, canvas, config=config)
@@ -240,9 +298,12 @@ def load_canvas_from_project(canvas, project_data):
                 sg = d.get("sourceGripIndex", 0)
                 eg = d.get("targetGripIndex", 0)
                 
-                conn = Connection(start_comp, sg, "right")
+                # Derive side from grip position (matches web's getClosestSide)
+                start_side = _get_grip_side(start_comp, sg)
+                conn = Connection(start_comp, sg, start_side)
                 if end_comp:
-                    conn.set_end_grip(end_comp, eg, "left")
+                    end_side = _get_grip_side(end_comp, eg)
+                    conn.set_end_grip(end_comp, eg, end_side)
                 
                 conn.update_path(canvas.components, canvas.connections)
                 canvas.connections.append(conn)
@@ -261,6 +322,39 @@ def load_canvas_from_project(canvas, project_data):
         canvas._is_loading = False
     
 # ---------------------- HELPERS ----------------------
+
+def _get_grip_side(component, grip_index):
+    """
+    Derive connection side from grip position.
+    Matches web's getClosestSide (routing.ts:131-145).
+    
+    Web convention: y=100 is top, y=0 is bottom.
+    """
+    grips = component.get_grips()
+    if grip_index < len(grips):
+        g = grips[grip_index]
+        
+        # If grip has explicit "side" key, use it
+        side = g.get("side")
+        if side:
+            return side
+        
+        x = g.get("x", 50)
+        y = g.get("y", 50)
+        
+        # Distances to each edge (web convention: y=100 is top)
+        dist_left = x
+        dist_right = 100 - x
+        dist_top = 100 - y      # y=100 → 0 distance to top
+        dist_bottom = y          # y=0 → 0 distance to bottom
+        
+        min_dist = min(dist_left, dist_right, dist_top, dist_bottom)
+        if min_dist == dist_left: return "left"
+        if min_dist == dist_right: return "right"
+        if min_dist == dist_top: return "top"
+        return "bottom"
+    return "right"
+
 def get_content_rect(canvas, padding=50):
     """Calculates the bounding rectangle of all canvas content."""
     content_rect = QRectF()

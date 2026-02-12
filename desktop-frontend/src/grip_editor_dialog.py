@@ -195,16 +195,9 @@ class GripEditorDialog(QDialog):
         editor_layout.setContentsMargins(5, 5, 5, 5)
         editor_layout.setSpacing(5)
         
-        editor_title = QLabel("Editor")
-        editor_title.setStyleSheet("""
-            font-size: 13px; 
-            font-weight: 600; 
-            padding: 8px; 
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            color: #495057;
-        """)
-        editor_layout.addWidget(editor_title)
+        self.editor_title = QLabel("Editor")
+        editor_layout.addWidget(self.editor_title)
+
         
         self.scene = QtWidgets.QGraphicsScene()
         self.svg_item = QtSvg.QGraphicsSvgItem(svg_path)
@@ -220,13 +213,7 @@ class GripEditorDialog(QDialog):
         self.view.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
         self.view.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
         self.view.viewport().installEventFilter(self)
-        self.view.setStyleSheet("""
-            QGraphicsView {
-                border: 1px solid #dee2e6;
-                border-radius: 6px;
-                background-color: white;
-            }
-        """)
+
         
         editor_layout.addWidget(self.view)
         
@@ -238,16 +225,8 @@ class GripEditorDialog(QDialog):
         preview_layout.setContentsMargins(5, 5, 5, 5)
         preview_layout.setSpacing(5)
         
-        preview_title = QLabel("Live Preview")
-        preview_title.setStyleSheet("""
-            font-size: 13px; 
-            font-weight: 600; 
-            padding: 8px; 
-            background-color: #e7f5ff;
-            border-radius: 4px;
-            color: #0c5460;
-        """)
-        preview_layout.addWidget(preview_title)
+        self.preview_title = QLabel("Live Preview")
+        preview_layout.addWidget(self.preview_title)
         
         self.preview_scene = QtWidgets.QGraphicsScene()
         self.preview_svg_item = QtSvg.QGraphicsSvgItem(svg_path)
@@ -258,13 +237,7 @@ class GripEditorDialog(QDialog):
             QtGui.QPainter.Antialiasing |
             QtGui.QPainter.SmoothPixmapTransform
         )
-        self.preview_view.setStyleSheet("""
-            QGraphicsView {
-                background-color: #f8f9fa; 
-                border: 2px solid #adb5bd;
-                border-radius: 6px;
-            }
-        """)
+
         preview_layout.addWidget(self.preview_view)
         
         # Fit preview to view
@@ -327,7 +300,69 @@ class GripEditorDialog(QDialog):
         QtWidgets.QShortcut(QtGui.QKeySequence("Meta++"), self, lambda: self.zoom(True))
         QtWidgets.QShortcut(QtGui.QKeySequence("Meta+="), self, lambda: self.zoom(True))
         QtWidgets.QShortcut(QtGui.QKeySequence("Meta+-"), self, lambda: self.zoom(False))
-        QtWidgets.QShortcut(QtGui.QKeySequence("Meta+0"), self, self.reset_zoom)
+    def apply_theme(self, theme):
+        if theme == "dark":
+            bg_main = "#0f172a"
+            text_main = "#f8fafc"
+            
+            # Titles
+            title_bg = "#1e293b"
+            title_text = "#94a3b8"
+            
+            # Views
+            view_bg = "#1e293b"
+            view_border = "#334155"
+            
+            # Button/Inputs
+            btn_bg = "#334155" 
+            btn_text = "#f8fafc"
+            
+        else:
+            bg_main = "#ffffff"
+            text_main = "#333333"
+            
+            title_bg = "#f8f9fa"
+            title_text = "#495057"
+            
+            view_bg = "#ffffff"
+            view_border = "#dee2e6"
+            
+            btn_bg = "#e5e7eb"
+            btn_text = "#374151"
+
+        self.setStyleSheet(f"""
+            QDialog {{ background-color: {bg_main}; color: {text_main}; }}
+            QLabel {{ color: {text_main}; }}
+            QCheckBox {{ color: {text_main}; }}
+            QPushButton {{
+                background-color: {btn_bg};
+                color: {btn_text};
+                border-radius: 4px;
+                padding: 6px;
+            }}
+        """)
+        
+        # Specific widgets
+        title_style = f"""
+            font-size: 13px; 
+            font-weight: 600; 
+            padding: 8px; 
+            background-color: {title_bg};
+            border-radius: 4px;
+            color: {title_text};
+        """
+        self.editor_title.setStyleSheet(title_style)
+        self.preview_title.setStyleSheet(title_style)
+        
+        view_style = f"""
+            QGraphicsView {{
+                border: 1px solid {view_border};
+                border-radius: 6px;
+                background-color: {view_bg};
+            }}
+        """
+        self.view.setStyleSheet(view_style)
+        self.preview_view.setStyleSheet(view_style)
 
     def update_preview(self):
         """Update the live preview with current grips"""

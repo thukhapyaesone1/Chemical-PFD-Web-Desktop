@@ -184,17 +184,23 @@ class CanvasWidget(QWidget):
             s_no = component_data.get('s_no', '')
             legend = component_data.get('legend', '')
             suffix = component_data.get('suffix', '')
+            svg = component_data.get('svg', '')
+            parent = component_data.get('parent', '')
         except (json.JSONDecodeError, ValueError):
             # Fallback for old format (plain text)
             object_name = text
             s_no = ''
             legend = ''
             suffix = ''
+            svg = ''
+            parent = ''
         
         self.create_component_command(object_name, pos, component_data={
             's_no': s_no,
             'legend': legend,
-            'suffix': suffix
+            'suffix': suffix,
+            'svg': svg,
+            'parent': parent
         })
         event.acceptProposedAction()
 
@@ -461,14 +467,33 @@ class CanvasWidget(QWidget):
     def create_component_command(self, text, pos, component_data=None):
         component_data = component_data or {}
         
-        svg = resources.find_svg_path(text, self.base_dir)
+        # 1. Try finding SVG by exact filename (from API)
+        svg_file = component_data.get('svg', '')
+        parent = component_data.get('parent', '')
+        svg = None
+        
+        if svg_file:
+            svg = resources.find_svg_file(svg_file, parent, self.base_dir)
+            
+        # 2. Fallback to fuzzy search
+        if not svg:
+            svg = resources.find_svg_path(text, self.base_dir)
+
         config = resources.get_component_config_by_name(text, self.component_config) or {}
         # Important: Copy config to prevent shared state between same components
         config = config.copy()
         
-        # Add s_no to config (CRITICAL for grip matching!)
+        # Add API data to config
         config["s_no"] = component_data.get('s_no', '')
         config["object"] = text
+        config["legend"] = component_data.get('legend', '')
+        config["suffix"] = component_data.get('suffix', '')
+        
+        # Pass grips from API if available
+        # Note: API grips might be JSON string or list. 
+        # ComponentWidget handles both in get_grips() "config fallback".
+        if component_data.get('grips'):
+            config["grips"] = component_data.get('grips')
         
         # Ensure name is set
         if "name" not in config:
@@ -478,14 +503,14 @@ class CanvasWidget(QWidget):
         key = resources.clean_string(text)
         label_text = text
 
-        # Use component_data legend/suffix if available
+        # Use component_data legend/suffix if available (already in config, but used for logic below)
         legend = component_data.get('legend', '')
         suffix = component_data.get('suffix', '')
 
         if key in self.label_data:
             d = self.label_data[key]
             d["count"] += 1
-            # Override with CSV data if available
+            # Override with API/CSV data if available
             legend = legend or d['legend']
             suffix = suffix or d['suffix']
             label_text = f"{legend}{d['count']:02d}{suffix}"
@@ -493,12 +518,15 @@ class CanvasWidget(QWidget):
         config["default_label"] = label_text
 
         if not svg:
+            # Check if we should warn
+            print(f"[CANVAS WARNING] No SVG found for {text} (File: {svg_file})")
+            
             lbl = QLabel(label_text, self)
             # Position at scaled pos
             v_x = int(pos.x() * self.zoom_level)
             v_y = int(pos.y() * self.zoom_level)
             lbl.move(v_x, v_y)
-            lbl.setStyleSheet("color:white; background:rgba(0,0,0,0.5); padding:4px; border-radius:4px;")
+            lbl.setStyleSheet("color:white; background:rgba(255,0,0,0.5); padding:4px; border-radius:4px;")
             lbl.show()
             lbl.adjustSize()
             return

@@ -1,0 +1,24 @@
+[
+  {
+    "s_no": "1",
+    "parent": "pump",
+    "name": "Centrifugal",
+    "legend": "S",
+    "suffix": "A/B",
+    "object": "CentrifugalPump",
+    "svg": "Centrifugal_Pump_h4jTtLd.svg",
+    "png": "Centrifugal_Pump_jSZYT2M.png",
+    "grips": [
+      {
+        "x": 97.5747,
+        "y": 90.2524,
+        "side": "right"
+      },
+      {
+        "x": 0.0137,
+        "y": 62.4682,
+        "side": "left"
+      }
+    ]
+  }
+]

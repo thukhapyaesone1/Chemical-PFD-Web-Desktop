@@ -113,8 +113,12 @@ def post_component(data, files):
     """
     url = f"{app_state.BACKEND_BASE_URL}/api/components/"
 
+    headers = {}
+    if app_state.access_token:
+        headers["Authorization"] = f"Bearer {app_state.access_token}"
+
     try:
-        response = requests.post(url, data=data, files=files)
+        response = requests.post(url, headers=headers, data=data, files=files)
         return response
     except Exception as e:
         print("[API ERROR] POST failed:", e)

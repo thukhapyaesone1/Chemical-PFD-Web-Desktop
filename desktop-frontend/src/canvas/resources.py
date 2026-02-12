@@ -7,21 +7,41 @@ def clean_string(s):
 
 def load_label_data(base_dir):
     label_data = {}
+    
+    # Try loading from JSON cache first (New Single Source of Truth)
+    json_path = os.path.join(base_dir, "ui", "assets", "components_cache.json")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                for item in data:
+                    key = item.get("object", "").strip() or item.get("name", "").strip()
+                    if not key: continue
+                    
+                    label_data[clean_string(key)] = {
+                        "legend": item.get("legend", "").strip(),
+                        "suffix": item.get("suffix", "").strip(),
+                        "count": 0
+                    }
+            return label_data
+        except Exception as e:
+            print("Failed to load components_cache.json:", e)
+
+    # Fallback to legacy CSV
     try:
         csv_path = os.path.join(base_dir, "ui", "assets", "Component_Details.csv")
+        if os.path.exists(csv_path):
+            with open(csv_path, 'r', encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    key = row.get("object", "").strip() or row.get("name", "").strip()
+                    if not key: continue
 
-        with open(csv_path, 'r', encoding='utf-8-sig') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                key = row.get("object", "").strip() or row.get("name", "").strip()
-                if not key:
-                    continue
-
-                label_data[clean_string(key)] = {
-                    "legend": row.get("legend", "").strip(),
-                    "suffix": row.get("suffix", "").strip(),
-                    "count": 0
-                }
+                    label_data[clean_string(key)] = {
+                        "legend": row.get("legend", "").strip(),
+                        "suffix": row.get("suffix", "").strip(),
+                        "count": 0
+                    }
     except Exception as e:
         print("Failed to load Component_Details.csv:", e)
     return label_data
@@ -39,13 +59,8 @@ def load_config(base_dir):
     return component_config
 
 def find_svg_path(name, base_dir):
-    ID_MAP = {
-        'Exchanger905': "905Exchanger",
-        'KettleReboiler907': "907Kettle Reboiler",
-        'OneCellFiredHeaterFurnace': "One Cell Fired Heater, Furnace",
-        'TwoCellFiredHeaterFurnace': "Two Cell Fired Heater, Furnace"
-    }
-    name = ID_MAP.get(name, name)
+    # ID_MAP removed (Legacy)
+    # name = ID_MAP.get(name, name)
     
     svg_dir = os.path.join(base_dir, "ui", "assets", "svg")
     target = clean_string(name)
@@ -71,13 +86,8 @@ def find_svg_path(name, base_dir):
     return None
 
 def get_component_config_by_name(name, component_config):
-    ID_MAP = {
-        'Exchanger905': "905Exchanger",
-        'KettleReboiler907': "907Kettle Reboiler",
-        'OneCellFiredHeaterFurnace': "One Cell Fired Heater",
-        'TwoCellFiredHeaterFurnace': "Two Cell Fired Heater"
-    }
-    name = ID_MAP.get(name, name)
+    # ID_MAP removed (Legacy)
+    # name = ID_MAP.get(name, name)
 
     if name in component_config:
         return component_config[name]
@@ -88,3 +98,33 @@ def get_component_config_by_name(name, component_config):
             return cfg
 
     return {}
+
+
+FOLDER_MAP = {
+    "Furnance and Boilers": "Furnaces and Boilers",
+    "Storage Vessels/ Tanks": "Storage Vessels Tanks",
+    "Size Reduction Equipments": "Size Reduction Equipements"
+}
+
+def find_svg_file(filename, parent, base_dir):
+    """
+    Find SVG file by exact filename and parent category.
+    Preferred over find_svg_path (fuzzy match).
+    """
+    if not filename:
+        return None
+        
+    folder = FOLDER_MAP.get(parent, parent)
+    
+    # Try specific path first
+    path = os.path.join(base_dir, "ui", "assets", "svg", folder, filename)
+    if os.path.exists(path):
+        return path
+        
+    # Fallback: Search in all svg subdirectories
+    svg_root = os.path.join(base_dir, "ui", "assets", "svg")
+    for root, _, files in os.walk(svg_root):
+        if filename in files:
+            return os.path.join(root, filename)
+            
+    return None
