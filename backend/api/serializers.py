@@ -29,6 +29,9 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 
 class ComponentSerializer(serializers.ModelSerializer):
+    svg_url = serializers.FileField(source='svg', read_only=True)
+    png_url = serializers.FileField(source='png', read_only=True)
+
     class Meta:
         model = Component
         fields = [
@@ -36,32 +39,17 @@ class ComponentSerializer(serializers.ModelSerializer):
             's_no',
             'name',
             'legend',
+            'parent',
             'suffix',
             'object',
             'svg',
             'png',
+            'svg_url',
+            'png_url',
             'grips',
             'created_by',
         ]
-    
-    def to_internal_value(self, data):
-        # Convert QueryDict to standard dict to handle JSON parsing correctly
-        if hasattr(data, 'dict'):
-            data = data.dict()
-        elif hasattr(data, 'copy'):
-            data = data.copy()
 
-        grips = data.get("grips")
-
-        if isinstance(grips, str):
-            try:
-                data["grips"] = json.loads(grips)
-            except json.JSONDecodeError:
-                raise serializers.ValidationError({
-                    "grips": "Invalid JSON format"
-                })
-
-        return super().to_internal_value(data)
 class CanvasStateSerializer(serializers.ModelSerializer):
     # Component fields (flattened)
     component_id = serializers.IntegerField(source="component.id", read_only=True)
