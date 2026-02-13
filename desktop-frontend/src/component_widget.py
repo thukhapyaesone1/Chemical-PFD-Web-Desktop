@@ -4,7 +4,7 @@ import json
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtCore import Qt, QRectF, QPoint, QPointF
-from PyQt5.QtGui import QPainter, QPen, QColor, QBrush
+from PyQt5.QtGui import QPainter, QPen, QColor
 
 class ComponentWidget(QWidget):
     def __init__(self, svg_path, parent=None, config=None):
@@ -13,8 +13,8 @@ class ComponentWidget(QWidget):
         self.config = config or {}
         self.renderer = QSvgRenderer(svg_path)
 
-        # Standard component size (Web Compatibility: 50x30)
-        self.setFixedSize(50, 30)
+        # Standard component size (closer to web default of 100x100)
+        self.setFixedSize(100, 60)
 
         self.hover_port = None
         self.is_selected = False
@@ -26,7 +26,7 @@ class ComponentWidget(QWidget):
         
         # Logical Coordinates (True 100% scale geometry)
         # Initialize from current geometry or valid defaults
-        self.logical_rect = QRectF(self.x(), self.y(), 50, 30)
+        self.logical_rect = QRectF(self.x(), self.y(), 100, 60)
 
         # Cache for grips to prevent file reading lag during paint events
         self._cached_grips = None
@@ -180,29 +180,16 @@ class ComponentWidget(QWidget):
         svg_rect = self.calculate_svg_rect(content_rect)
         self._cached_svg_rect = svg_rect  # Cache it for grip calculations
 
-        # BACKGROUND PLATE (Opacity & Theme Coverage)
-        # Import inside method to avoid circular imports if any, or rely on global import
         import src.app_state as app_state
-        
-        # Always draw background to Ensure Opacity (fix Z-ordering issues)
-        # Dark Mode: Slate 200 (#e2e8f0) | Light Mode: White
-        bg_color = QColor("#e2e8f0") if app_state.current_theme == "dark" else Qt.white
-        
-        painter.setBrush(QBrush(bg_color))
-        painter.setPen(Qt.NoPen)
-        
-        # Draw rounded rect filling the component area
-        # This hides connections passing "behind" the component
-        painter.drawRoundedRect(svg_rect, 4, 4)
 
-        # Render SVG
+        # Render SVG (no opaque background — connections route around components)
         self.renderer.render(painter, svg_rect)
 
-        # Selection Border — drawn AFTER background so it's visible on top
+        # Selection Border — drawn INSET so it stays within widget clip rect
         if self.is_selected:
-            painter.setPen(QPen(QColor("#60a5fa"), 2))
+            painter.setPen(QPen(QColor("#60a5fa"), 2.5))
             painter.setBrush(Qt.NoBrush)
-            painter.drawRoundedRect(svg_rect.adjusted(-1, -1, 1, 1), 8, 8)
+            painter.drawRoundedRect(svg_rect.adjusted(1, 1, -1, -1), 6, 6)
 
         # Label
         if self.config.get('default_label'):
@@ -404,7 +391,15 @@ class ComponentWidget(QWidget):
                         if hasattr(parent, "expand_to_contain"):
                             parent.expand_to_contain(comp.logical_rect)
                         
-                parent.update()
+                # Recalculate paths for connections attached to moved components
+                if hasattr(parent, "connections"):
+                    moved = {c for c in parent.components if c.is_selected}
+                    for conn in parent.connections:
+                        if conn.start_component in moved or conn.end_component in moved:
+                            conn.update_path(parent.components, parent.connections)
+                        
+                # Force full repaint — prevents stale connection artefacts
+                parent.repaint()
             else:
                  # Single item move (fallback)
                  z = self.parent().zoom_level if (self.parent() and hasattr(self.parent(), "zoom_level")) else 1.0
@@ -414,7 +409,7 @@ class ComponentWidget(QWidget):
                  self.logical_rect.moveTo(new_pos.x() / z, new_pos.y() / z)
                  self.update_visuals(z)
                  
-                 if self.parent(): self.parent().update()
+                 if self.parent(): self.parent().repaint()
 
             self.drag_start_global = curr_global
 

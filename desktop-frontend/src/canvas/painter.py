@@ -12,10 +12,9 @@ def draw_grid(painter, width, height, theme="light"):
 
 def draw_connections(painter, connections, components, theme="light", zoom=1.0):
     # Draw all finished connections
+    # Note: conn.update_path() is NOT called here — it is called only when
+    # endpoints actually change (drag, drop, connect), not on every repaint.
     for conn in connections:
-        # Update path with Jump Logic
-        conn.update_path(components, connections)
-
         # Render Connection (Line + Arrow + Jumps)
         conn.paint(painter, theme=theme, zoom=zoom)
 

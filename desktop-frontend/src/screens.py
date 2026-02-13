@@ -218,6 +218,11 @@ class LoginScreen(QDialog):
         app_state.refresh_token = refresh
         app_state.current_user = user
 
+        # Sync component library now that we have a valid auth token
+        canvas_screen = app_state.screens.get("canvas")
+        if canvas_screen and hasattr(canvas_screen, "library"):
+            canvas_screen.library.reload_components()
+
         print("Successfully logged in via backend.")
         show_toast("Logged in successfully!")
         slide_to_index(3, direction=1)

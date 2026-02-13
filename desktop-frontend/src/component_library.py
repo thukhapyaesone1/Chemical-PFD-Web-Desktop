@@ -204,9 +204,7 @@ class ComponentLibrary(QWidget):
         
         self._setup_ui()
         self.apply_theme(self.current_library_theme)
-        self._sync_components_with_backend()
-        self._load_components()
-        self._populate_icons()
+        self._populate_icons()  # shows empty initially
 
         # Loader animation (hidden by default)
         self.loader_label = QLabel(self)
@@ -216,6 +214,19 @@ class ComponentLibrary(QWidget):
         self.loader_movie.setScaledSize(QSize(64, 64))
         self.loader_label.setMovie(self.loader_movie)
         self.loader_label.setVisible(False)
+
+    def reload_components(self):
+        """Fetch components from API on a background thread, then refresh UI."""
+        def _worker():
+            self._load_components_from_api()
+            QApplication.postEvent(self, FunctionEvent(self._on_api_load_done))
+        
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+
+    def _on_api_load_done(self):
+        """Main-thread callback: repopulate icons after API fetch."""
+        self._populate_icons()
 
     
     def _setup_ui(self):
@@ -286,134 +297,60 @@ class ComponentLibrary(QWidget):
         self.loader_movie.stop()
         self.loader_label.setVisible(False)
 
-    def _load_components(self):
-        """Load components from local JSON cache."""
-        cache_path = os.path.join("ui", "assets", "components_cache.json")
-        
-        self.component_data.clear()
-        
-        if not os.path.exists(cache_path):
-            # Try loading from legacy CSV if JSON doesn't exist (migration path)
-            csv_path = os.path.join("ui", "assets", "Component_Details.csv")
-            if os.path.exists(csv_path):
-                self._load_from_legacy_csv(csv_path)
-            return
-
-        try:
-            with open(cache_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                
-            for comp in data:
-                # Ensure all required fields exist
-                s_no = str(comp.get("s_no", "")).strip()
-                if not s_no: continue
-                
-                is_new = s_no in self.new_snos
-                comp["is_new"] = is_new
-                self.component_data.append(comp)
-                
-        except Exception as e:
-            print(f"[LOAD ERROR] Failed to load cache: {e}")
-
-    def _load_from_legacy_csv(self, csv_path):
-        try:
-            with open(csv_path, 'r', encoding='utf-8-sig') as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    if row['parent'] and row['name']:
-                        self.component_data.append(row)
-        except Exception:
-            pass
-
-    def _sync_components_with_backend(self):
-        """
-        Fetch components from backend and update local JSON cache.
-        """
+    def _load_components_from_api(self):
+        """Fetch components directly from backend API (network call — run on bg thread)."""
         try:
             api_components = api_client.get_components()
             if not api_components:
                 print("[SYNC] No components received or API failed.")
-                return 
+                return
 
-            cache_path = os.path.join("ui", "assets", "components_cache.json")
-            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-            
-            # Use a dict for easy lookup/merging
-            existing_map = {}
-            if os.path.exists(cache_path):
-                try:
-                    with open(cache_path, "r", encoding="utf-8") as f:
-                        old_data = json.load(f)
-                        for item in old_data:
-                            existing_map[item.get("s_no")] = item
-                except:
-                    pass
-
-            processed_components = []
-
+            new_data = []
             for comp in api_components:
                 s_no = str(comp.get("s_no", "")).strip()
-                if not s_no: continue
+                if not s_no:
+                    continue
 
-                # Identify if new
-                if s_no not in existing_map:
-                    self.new_snos.add(s_no)
-
-                # Extract SVG/PNG filenames for local caching
+                # Download assets if missing
                 png_url = comp.get("png_url") or comp.get("png")
                 svg_url = comp.get("svg_url") or comp.get("svg")
-
                 png_filename = os.path.basename(png_url) if png_url else ""
                 svg_filename = os.path.basename(svg_url) if svg_url else ""
 
                 parent = comp.get("parent", "").strip()
                 parent_folder = self.FOLDER_MAP.get(parent, parent)
 
-                # Download if missing
                 if png_url:
                     self._download_asset(png_url, png_filename, "png", parent_folder)
                 if svg_url:
                     self._download_asset(svg_url, svg_filename, "svg", parent_folder)
 
-                # Create standardized record
-                record = {
+                new_data.append({
                     "s_no": s_no,
                     "parent": parent,
                     "name": comp.get("name", "").strip(),
                     "legend": comp.get("legend", ""),
                     "suffix": comp.get("suffix", ""),
-                    "object": comp.get("object", "").strip(), 
+                    "object": comp.get("object", "").strip(),
                     "svg": svg_filename,
                     "png": png_filename,
-                    "grips": comp.get("grips", "")
-                }
-                
-                # Check for updates? For now, we trust backend is truth.
-                processed_components.append(record)
-                existing_map[s_no] = record
+                    "grips": comp.get("grips", ""),
+                })
 
-            # Add back items from cache that might not be in API? 
-            # Ideally NO, backend is source of truth. Valid components should be in backend.
-            # But during dev, maybe we keep them? 
-            # Decision: Single Source of Truth means we only keep what API gives us.
-            # However, if API fails, we returned early above. 
-            # So here `api_components` is valid. We overwrite the cache with ONLY API data.
-            
-            final_list = processed_components
-            
-            # Sort
+            # Sort by s_no
             try:
-                final_list.sort(key=lambda x: int(x['s_no']) if x['s_no'].isdigit() else x['s_no'])
-            except:
+                new_data.sort(key=lambda x: int(x["s_no"]) if x["s_no"].isdigit() else x["s_no"])
+            except Exception:
                 pass
 
-            with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump(final_list, f, indent=2)
-                
-            print(f"[SYNC] Cache updated with {len(final_list)} components.")
+            # Replace component_data atomically
+            self.component_data = new_data
+            print(f"[SYNC] Loaded {len(new_data)} components from API.")
 
         except Exception as e:
-            print("[SYNC CRITICAL ERROR]", e)
+            print(f"[SYNC ERROR] {e}")
+
+    # _sync_components_with_backend removed — replaced by _load_components_from_api above
 
     def _download_asset(self, url, filename, asset_type, parent_folder):
         """Helper to download assets if missing."""
@@ -640,8 +577,7 @@ class ComponentLibrary(QWidget):
         def task():
             # 1. Background work
             self.component_data.clear()
-            self._sync_components_with_backend()
-            self._load_components()
+            self._load_components_from_api()
 
             # 2. Ensure minimum loader time (1 second)
             elapsed = time.time() - start_time
