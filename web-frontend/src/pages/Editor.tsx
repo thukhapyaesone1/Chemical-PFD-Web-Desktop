@@ -1,58 +1,55 @@
 // Editor.tsx (integrated version)
-import React, { useEffect, useState, useRef, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Stage, Layer, Line, Shape } from "react-konva";
-import Konva from "konva";
 import {
   Button,
   Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
   DropdownItem,
-  Tooltip,
-  Switch,
+  DropdownMenu,
+  DropdownTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Slider,
+  Switch,
+  Tooltip,
 } from "@heroui/react";
+import Konva from "konva";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { FiDownload } from "react-icons/fi";
+import { MdCenterFocusWeak, MdZoomIn, MdZoomOut } from "react-icons/md";
 import {
-  TbLayoutSidebarRightExpand,
-  TbLayoutSidebarRightCollapse,
+  TbFileImport,
+  TbGridDots, TbGridPattern,
   TbLayoutSidebarLeftCollapse,
   TbLayoutSidebarLeftExpand,
-  TbFileImport,
+  TbLayoutSidebarRightCollapse,
+  TbLayoutSidebarRightExpand,
 } from "react-icons/tb";
-import { MdZoomIn, MdZoomOut, MdCenterFocusWeak } from "react-icons/md";
-import { FiDownload } from "react-icons/fi";
-import { Popover, PopoverTrigger, PopoverContent } from "@heroui/react";
-import { TbGridDots, TbGridPattern } from "react-icons/tb";
+import { Layer, Line, Shape, Stage } from "react-konva";
+import { useNavigate, useParams } from "react-router-dom";
 
-import { ThemeSwitch } from "@/components/theme-switch";
 import { CanvasItemImage } from "@/components/Canvas/CanvasItemImage";
-import { ConnectionLine } from "@/components/Canvas/ConnectionLine";
 import {
-  ComponentLibrarySidebar,
   CanvasPropertiesSidebar,
+  ComponentLibrarySidebar,
 } from "@/components/Canvas/ComponentLibrarySidebar";
-import { calculateManualPathsWithBridges } from "@/utils/routing";
-import { useComponents } from "@/context/ComponentContext";
+import { ConnectionLine } from "@/components/Canvas/ConnectionLine";
 import ExportModal from "@/components/Canvas/ExportModal";
+import { ThemeSwitch } from "@/components/theme-switch";
+import { useComponents } from "@/context/ComponentContext";
+import { calculateManualPathsWithBridges } from "@/utils/routing";
 // import { exportDiagram, downloadBlob } from "@/utils/exports";
-import { ExportOptions } from "@/components/Canvas/types";
-import { useEditorStore } from "@/store/useEditorStore";
-import {
-  type ComponentItem,
-  type CanvasItem,
-  type Connection,
-} from "@/components/Canvas/types";
 import { ExportReportModal } from "@/components/Canvas/ExportReportModal";
+import { ExportOptions, type CanvasItem, type ComponentItem, type Connection } from "@/components/Canvas/types";
+import { NewProjectModal } from "@/components/NewProjectModal";
+import { SaveConfirmationModal } from "@/components/SaveConfirmationModal";
+import { UnsavedChangesModal } from "@/components/UnsavedChangesModal";
+import { useEditorStore } from "@/store/useEditorStore";
 import {
   createExportData,
   exportToDiagramFile,
   importFromDiagramFile,
   migrateExportData,
 } from "@/utils/diagramExport";
-import { SaveConfirmationModal } from "@/components/SaveConfirmationModal";
-import { UnsavedChangesModal } from "@/components/UnsavedChangesModal";
-import { NewProjectModal } from "@/components/NewProjectModal";
 // import {
 //   getProject,
 //   saveProject,
@@ -61,9 +58,9 @@ import { NewProjectModal } from "@/components/NewProjectModal";
 //   convertToBackendFormat,
 // } from "@/utils/projectStorage";
 import {
+  createProject,
   fetchProject,
   saveProjectCanvas,
-  createProject,
 } from "@/api/projectApi";
 import { convertToBackendFormat, SavedProject } from "@/utils/projectStorage";
 
