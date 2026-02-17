@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
 
     # Third party
+    "axes",
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
@@ -80,6 +81,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "axes.middleware.AxesMiddleware",
+
 ]
 
 
@@ -159,6 +162,11 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 
 # ===============================
 # REST FRAMEWORK
@@ -171,6 +179,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '20/minute',
+        'anon': '10/minute',
+    }
 }
 
 SIMPLE_JWT = {
@@ -228,3 +244,11 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+# ===============================
+# AXES CONFIGURATION
+# ===============================
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 1  # in hours
+AXES_LOCK_OUT_AT_FAILURE = True
+AXES_RESET_ON_SUCCESS = True
