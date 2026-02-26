@@ -493,6 +493,45 @@ class CanvasScreen(QMainWindow):
             self.library.reload_components()
 
     def on_back_home(self):
+        active_sub = self.mdi_area.currentSubWindow()
+        if not active_sub or not isinstance(active_sub, CanvasSubWindow):
+            slide_to_index(3, direction=-1)
+            return
+
+        canvas = active_sub.get_canvas()
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Back to Home",
+            "Do you want to save the current file or discard it?",
+            QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Save,
+        )
+
+        if reply == QtWidgets.QMessageBox.Cancel:
+            return
+
+        if reply == QtWidgets.QMessageBox.Save:
+            saved = self.on_save_as_file()
+            if not saved:
+                return
+            if hasattr(canvas, "undo_stack"):
+                canvas.undo_stack.setClean()
+            canvas.is_modified = False
+
+        if reply == QtWidgets.QMessageBox.Discard:
+            if getattr(canvas, "is_new_project", False) and getattr(canvas, "project_id", None):
+                from src.api_client import delete_project
+                delete_project(canvas.project_id)
+
+        self._close_current_project()
+
+    def _close_current_project(self):
+        self.mdi_area.closeAllSubWindows()
+        if self.mdi_area.subWindowList():
+            return
+        app_state.current_project_id = None
+        app_state.current_project_name = None
+        app_state.pending_project_id = None
         slide_to_index(3, direction=-1)
 
     def _register_shortcuts(self):
