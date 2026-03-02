@@ -24,6 +24,10 @@ class ComponentWidget(QWidget):
         self.rotation_angle = 0
         self.drag_start_positions = {}
         
+        # Validation State
+        self.is_valid = True
+        self.validation_error_msg = ""
+        
         # Logical Coordinates (True 100% scale geometry)
         # Initialize from current geometry or valid defaults
         self.logical_rect = QRectF(self.x(), self.y(), 100, 60)
@@ -177,6 +181,13 @@ class ComponentWidget(QWidget):
         return grips
 
     def paintEvent(self, event):
+        # Update tooltip based on validity
+        if not self.is_valid and self.validation_error_msg:
+            self.setToolTip(self.validation_error_msg)
+        else:
+            # We don't want to hide default tooltips if they existed, but currently they are mostly empty
+            self.setToolTip(self.config.get("name", ""))
+            
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
@@ -196,6 +207,14 @@ class ComponentWidget(QWidget):
             painter.setPen(QPen(QColor("#60a5fa"), 2.5))
             painter.setBrush(Qt.NoBrush)
             painter.drawRoundedRect(svg_rect.adjusted(1, 1, -1, -1), 6, 6)
+            
+        # Validation Warning Indicator (Halo)
+        if not self.is_valid:
+            error_color = QColor("#f87171") if app_state.current_theme == "dark" else QColor("#ef4444")
+            painter.setPen(QPen(error_color, 2.5, Qt.DashLine))
+            painter.setBrush(Qt.NoBrush)
+            # Draw slightly inside selection box to avoid overlap when both are active
+            painter.drawRoundedRect(svg_rect.adjusted(3, 3, -3, -3), 6, 6)
 
         # Label (drawn below SVG, within the extra LABEL_H space added by update_visuals)
         if self.config.get('default_label'):
