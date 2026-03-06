@@ -23,7 +23,7 @@ interface Rect {
 
 import { calculateAspectFit } from "./layout";
 
-const getGripPosition = (item: CanvasItem, gripIndex: number): Point | null => {
+export const getGripPosition = (item: CanvasItem, gripIndex: number): Point | null => {
   if (!item.grips || gripIndex >= item.grips.length) return null;
 
   // Calculate the actual rendered box of the image
@@ -75,7 +75,7 @@ const segmentHitsRect = (p1: Point, p2: Point, r: Rect) => {
   );
 };
 
-const smartRoute = (
+export const smartRoute = (
   start: Point,
   end: Point,
   items: CanvasItem[]
@@ -192,7 +192,37 @@ export interface PathMetadata {
   pathData: string;
   endPoint?: Point;
   arrowAngle?: number;
+  waypoints?: Point[];
 }
+
+export const STANDOFF_DIST = 20;
+
+export const getClosestSide = (g: any): "top" | "bottom" | "left" | "right" => {
+  if (!g) return "bottom"; // Fallback
+
+  const distLeft = g.x;
+  const distRight = 100 - g.x;
+  const distTop = 100 - g.y; // y=100 is top (0 distance)
+  const distBottom = g.y;    // y=0 is bottom (0 distance)
+
+  const min = Math.min(distLeft, distRight, distTop, distBottom);
+
+  if (min === distLeft) return "left";
+  if (min === distRight) return "right";
+  if (min === distTop) return "top";
+  return "bottom";
+};
+
+export const getStandoff = (p: Point, grip: any) => {
+  const side = getClosestSide(grip);
+  if (!side) return p;
+
+  if (side === "left") return { x: p.x - STANDOFF_DIST, y: p.y };
+  if (side === "right") return { x: p.x + STANDOFF_DIST, y: p.y };
+  if (side === "top") return { x: p.x, y: p.y - STANDOFF_DIST }; // Top is UP (negative Y in canvas)
+  if (side === "bottom") return { x: p.x, y: p.y + STANDOFF_DIST }; // Bottom is DOWN (positive Y in canvas)
+  return p;
+};
 
 export const calculateManualPathsWithBridges = (
   connections: Connection[],
@@ -200,6 +230,7 @@ export const calculateManualPathsWithBridges = (
 ): Record<number, PathMetadata> => {
   // 1. Build geometry for all lines
   const rawLines: { id: number; segments: LineSegment[] }[] = [];
+  const connectionWaypoints: Record<number, Point[]> = {};
 
   for (const conn of connections) {
     const source = items.find((i) => i.id === conn.sourceItemId);
@@ -213,44 +244,22 @@ export const calculateManualPathsWithBridges = (
     if (!start || !end) continue;
 
     // --- Standoff Logic ---
-    const STANDOFF_DIST = 20;
-
     const sourceGrip = source.grips?.[conn.sourceGripIndex];
     const targetGrip = target.grips?.[conn.targetGripIndex];
-
-    const getClosestSide = (g: any): "top" | "bottom" | "left" | "right" => {
-      if (!g) return "bottom"; // Fallback
-
-      const distLeft = g.x;
-      const distRight = 100 - g.x;
-      const distTop = 100 - g.y; // y=100 is top (0 distance)
-      const distBottom = g.y;    // y=0 is bottom (0 distance)
-
-      const min = Math.min(distLeft, distRight, distTop, distBottom);
-
-      if (min === distLeft) return "left";
-      if (min === distRight) return "right";
-      if (min === distTop) return "top";
-      return "bottom";
-    };
-
-    const getStandoff = (p: Point, grip: any) => {
-      const side = getClosestSide(grip);
-      if (!side) return p;
-
-      if (side === "left") return { x: p.x - STANDOFF_DIST, y: p.y };
-      if (side === "right") return { x: p.x + STANDOFF_DIST, y: p.y };
-      if (side === "top") return { x: p.x, y: p.y - STANDOFF_DIST }; // Top is UP (negative Y in canvas)
-      if (side === "bottom") return { x: p.x, y: p.y + STANDOFF_DIST }; // Bottom is DOWN (positive Y in canvas)
-      return p;
-    };
 
     const startStandoff = getStandoff(start, sourceGrip);
     const endStandoff = getStandoff(end, targetGrip);
 
     const points: Point[] = [start, startStandoff];
 
-    const bends = smartRoute(startStandoff, endStandoff, items);
+    let bends: Point[];
+    if (conn.waypoints && conn.waypoints.length > 0) {
+      bends = conn.waypoints;
+    } else {
+      bends = smartRoute(startStandoff, endStandoff, items);
+    }
+
+    connectionWaypoints[conn.id] = bends;
     points.push(...bends);
 
     points.push(endStandoff);
@@ -367,14 +376,17 @@ export const calculateManualPathsWithBridges = (
       };
 
       // atan2(y, x) returns angle in radians. Convert to degrees.
-      // Konva rotation is in degrees.
-      // RegularPolygon (triangle) points UP at 0 deg, but 0 rad is RIGHT.
       // So we add 90 degrees to align it with the vector.
       arrowAngle =
         Math.atan2(lastSeg.dir.y, lastSeg.dir.x) * (180 / Math.PI) + 90;
     }
 
-    finalPaths[line.id] = { pathData, endPoint, arrowAngle };
+    finalPaths[line.id] = {
+      pathData,
+      endPoint,
+      arrowAngle,
+      waypoints: connectionWaypoints[line.id]
+    };
   }
 
   return finalPaths;
