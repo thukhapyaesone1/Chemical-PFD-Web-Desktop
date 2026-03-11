@@ -121,9 +121,6 @@ class Connection:
             self._calculate_path_with_auto_router(components, other_connections)
         else:
             self._calculate_path_rule_based()
-
-        if components and self.path:
-            self.path = self._reroute_around_components(self.path, components)
     
     def _calculate_path_with_auto_router(self, components, other_connections=None):
         """
@@ -176,6 +173,7 @@ class Connection:
         Determines the path points based on start/end positions and grip directions.
         
         This is the fallback/default routing strategy when auto-router is disabled.
+        Ports the logic from the reference project.
         
         IMPORTANT: All intermediate points are strictly aligned to ensure perfect orthogonality.
         """
@@ -372,84 +370,9 @@ class Connection:
 
         points.append(end_point)
         
+        # CRITICAL: Ensure perfect orthogonality by aligning all intermediate points
+        # This prevents diagonal segments that can occur due to floating point calculations
         self.path = self._ensure_orthogonal_path(points)
-
-    def _reroute_around_components(self, points: list, components: list) -> list:
-        if len(points) < 2:
-            return points
-
-        blocked_components = []
-        for comp in components:
-            if comp == self.start_component or comp == self.end_component:
-                continue
-            if hasattr(comp, "logical_rect"):
-                blocked_components.append(comp.logical_rect)
-
-        if not blocked_components:
-            return points
-
-        safe_points = [QPointF(points[0])]
-
-        for index in range(1, len(points)):
-            current_start = safe_points[-1]
-            current_end = QPointF(points[index])
-            segment_points = self._build_safe_segment(current_start, current_end, blocked_components)
-            if segment_points:
-                safe_points.extend(segment_points)
-
-        return self._ensure_orthogonal_path(safe_points)
-
-    def _build_safe_segment(self, start: QPointF, end: QPointF, blocked_components: list) -> list:
-        if self._is_segment_clear(start, end, blocked_components):
-            return [QPointF(end)]
-
-        padding = 14.0
-        top_y = min(rect.top() for rect in blocked_components) - padding
-        bottom_y = max(rect.bottom() for rect in blocked_components) + padding
-        left_x = min(rect.left() for rect in blocked_components) - padding
-        right_x = max(rect.right() for rect in blocked_components) + padding
-
-        candidates = [
-            [QPointF(start.x(), top_y), QPointF(end.x(), top_y), QPointF(end)],
-            [QPointF(start.x(), bottom_y), QPointF(end.x(), bottom_y), QPointF(end)],
-            [QPointF(left_x, start.y()), QPointF(left_x, end.y()), QPointF(end)],
-            [QPointF(right_x, start.y()), QPointF(right_x, end.y()), QPointF(end)],
-        ]
-
-        for candidate in candidates:
-            if self._candidate_path_clear(start, candidate, blocked_components):
-                return candidate
-
-        return [QPointF(end)]
-
-    def _candidate_path_clear(self, start: QPointF, candidate: list, blocked_components: list) -> bool:
-        previous = start
-        for point in candidate:
-            if not self._is_segment_clear(previous, point, blocked_components):
-                return False
-            previous = point
-        return True
-
-    def _is_segment_clear(self, start: QPointF, end: QPointF, blocked_components: list) -> bool:
-        segment = QLineF(start, end)
-        for rect in blocked_components:
-            if rect.contains(start) or rect.contains(end):
-                return False
-
-            edges = [
-                QLineF(rect.topLeft(), rect.topRight()),
-                QLineF(rect.topRight(), rect.bottomRight()),
-                QLineF(rect.bottomRight(), rect.bottomLeft()),
-                QLineF(rect.bottomLeft(), rect.topLeft()),
-            ]
-
-            for edge in edges:
-                intersection_point = QPointF()
-                intersection_type = segment.intersect(edge, intersection_point)
-                if intersection_type == QLineF.BoundedIntersection:
-                    return False
-
-        return True
 
     def _ensure_orthogonal_path(self, points: list) -> list:
         """
@@ -688,9 +611,6 @@ class Connection:
         """
         Converts self.path (points) into self.painter_path (QPainterPath)
         with semi-circle jumps over intersecting connections.
-        
-        Enhanced to make crossing lines more visually distinguishable with
-        improved arc rendering and better jump detection.
         """
         self.painter_path = QPainterPath()
         if not self.path:
@@ -698,8 +618,8 @@ class Connection:
 
         self.painter_path.moveTo(self.path[0])
         
-        # Increased radius for better visibility of jumps
-        r = 8.0 
+        # radius of the jump
+        r = 6.0 
 
         for i in range(len(self.path) - 1):
             p1 = self.path[i]
@@ -777,31 +697,59 @@ class Connection:
                     self.painter_path.lineTo(dest)
                 
                 # Draw Jump (Arc)
-                # Enhanced jump arc calculation for better visual distinction
+                # We want a semi-circle. 
                 # QPainterPath.arcTo(rect, startAngle, sweepLength)
                 # Rect is bounding box of the circle.
                 # Center of jump is p1 + u * dist
                 jump_center = p1 + u * dist
                 
-                # Create bounding rectangle for the arc
+                # Determine rect
+                # This arc should bulge "up" relative to the line direction?
+                # Standard PFD jump convention: usually bumps 'up' (screen Y negative) for horizontal
+                # For vertical, bumps left or right?
+                # Let's say we bump "Positive Normal"
+                # Normal (-y, x)
+                
                 rect_top_left = jump_center - QPointF(r, r)
                 rect = QRectF(rect_top_left, QSizeF(2*r, 2*r))
                 
-                # Calculate angle of the line for proper arc orientation
+                # Calculate angle of the line
                 angle = math.degrees(math.atan2(u.y(), u.x()))
+                # arcTo takes start angle (3 o'clock is 0)
+                # We want to start at angle - 180 (backwards) ? No.
+                # If moving Right (0 deg), we start at 180 (left side of circle) and sweep -180 (up/ccw?)
                 
-                # Improved arc calculation for better visual distinction:
-                # The arc should create a clear bridge over the crossing line
-                # We calculate the proper start angle and sweep direction based on line direction
-                # to ensure the jump is always visible and consistent
-                # 
-                # Qt coordinate system: 0° = East (right), 90° = South (down), 180° = West (left), 270° = North (up)
-                # For a line moving right (0°), we start at 180° (left side) and sweep +180° counter-clockwise through 270° (up)
-                # This creates a visible arc that bulges upward/leftward relative to the line direction
-                start_angle = -angle + 180
-                sweep_angle = -180
+                # Actually, simpler: 
+                # p_start = center - u*r
+                # p_end = center + u*r
                 
-                self.painter_path.arcTo(rect, start_angle, sweep_angle)
+                # If we use arcTo, we need the rect.
+                # if Line is Horizontal Right (0 deg)
+                # we draw line to left-of-center.
+                # We want arc to go UP. 
+                # StartAngle 180, Sweep -180 (Clockwise check?)
+                # Qt: Positive sweep is Counter-Clockwise.
+                # if we want Bump UP, we need start 180, sweep 180? (Goes down?)
+                # 0 is East. 90 is North (Screen Y is down, so 90 is Down visually in normal math, but Qt Y is down)
+                # Wait, Qt Y is down.
+                # 0 = Right (X+)
+                # 90 = Down (Y+)
+                # 270 = Up (Y-)
+                
+                # If Horizontal Right: Start 180 (Left), sweep +180 -> goes through 270 (Up). Correct.
+                # If Horizontal Left: Angle 180.
+                # We approach from Right side of circle (0 deg).
+                # Start 0. Sweep -180 -> goes through -90 (Up, which is 270). Correct. (Or +180 goes through 90 Down)
+                
+                # General Formula:
+                # we enter at -u (relative to center).
+                # angle of -u is angle + 180.
+                # we want to bulge 'Left' relative to direction? Or just always Up/Left?
+                # Let's simple fix: always counter-clockwise (+180)
+                
+                self.painter_path.arcTo(rect, -angle + 180, -180) 
+                # Note: Qt angles are counter-clockwise, but Y is flipped.
+                # Visual Check required.
                 
                 current_dist = dist + r
             

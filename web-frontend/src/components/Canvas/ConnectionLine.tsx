@@ -7,11 +7,11 @@ import { Connection, CanvasItem } from "./types";
 
 interface ConnectionLineProps {
   connection: Connection;
-  points: { x: number, y: number }[];
+  points: { x: number; y: number }[];
   items?: CanvasItem[];
   isSelected?: boolean;
   onSelect?: (e: KonvaEventObject<MouseEvent>) => void;
-  onWaypointDrag?: (index: number, pos: { x: number, y: number }) => void;
+  onWaypointDrag?: (index: number, pos: { x: number; y: number }) => void;
   arrowAngle?: number;
   targetPosition?: { x: number; y: number };
 }
@@ -88,42 +88,48 @@ export const ConnectionLine = ({
         />
       )}
       {/* 4. DRAG HANDLES */}
-      {isSelected && points && points.map((p, i) => (
-        <Circle
-          key={i}
-          x={p.x}
-          y={p.y}
-          radius={6}
-          fill="#00e5ff"
-          stroke="#000"
-          strokeWidth={1}
-          draggable
-          onDragMove={(e) => {
-            const dx = Math.abs(e.target.x() - p.x);
-            const dy = Math.abs(e.target.y() - p.y);
+      {isSelected &&
+        points &&
+        points.map((p, i) => (
+          <Circle
+            key={i}
+            x={p.x}
+            y={p.y}
+            radius={6}
+            fill="#00e5ff"
+            stroke="#000"
+            strokeWidth={1}
+            draggable
+            onDragMove={(e) => {
+              const dx = Math.abs(e.target.x() - p.x);
+              const dy = Math.abs(e.target.y() - p.y);
 
-            // Lock axis based on which way they drag more for clean 90-degree wires
-            if (dx > dy) {
-              e.target.y(p.y);
-            } else {
-              e.target.x(p.x);
-            }
+              let newX = p.x;
+              let newY = p.y;
 
-            onWaypointDrag?.(i, {
-              x: e.target.x(),
-              y: e.target.y()
-            });
-          }}
-          onMouseEnter={(e) => {
-            const stage = e.target.getStage();
-            if (stage) stage.container().style.cursor = "move";
-          }}
-          onMouseLeave={(e) => {
-            const stage = e.target.getStage();
-            if (stage) stage.container().style.cursor = "default";
-          }}
-        />
-      ))}
+              if (dx > dy) {
+                newX = e.target.x();
+                e.target.y(p.y);
+              } else {
+                newY = e.target.y();
+                e.target.x(p.x);
+              }
+
+              onWaypointDrag?.(i, {
+                x: newX,
+                y: newY,
+              });
+            }}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "move";
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "default";
+            }}
+          />
+        ))}
     </>
   );
 };
