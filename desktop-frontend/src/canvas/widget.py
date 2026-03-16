@@ -73,29 +73,11 @@ class CanvasWidget(QWidget):
         }
         
     def run_validation(self):
-        """Re-evaluates the canvas state for graph errors matching PFD rules."""
-        validator = GraphValidator(self.components, self.connections)
-        self.validation_errors = validator.validate()
-        
-        # Update component error states
+        """Structural graph check kept for undo-stack triggers; no UI warnings shown."""
+        # Clear any previously set error state so badges never appear
         for comp in self.components:
             comp.is_valid = True
             comp.validation_error_msg = ""
-            
-            error_msgs = []
-            if comp in self.validation_errors["loops"]:
-                comp.is_valid = False
-                error_msgs.append("Circular loop detected.")
-            if comp in self.validation_errors["flow_errors"]:
-                comp.is_valid = False
-                error_msgs.append("Component has no inlet or outlet connections.")
-                
-            if error_msgs:
-                comp.validation_error_msg = "\n".join(error_msgs)
-            
-            comp.update() # Trigger repaint to show/hide error styling
-
-        # Trigger re-paint on the main canvas (e.g. for global warning indicators)
         self.update()
 
     def expand_to_contain(self, rect):
@@ -252,8 +234,11 @@ class CanvasWidget(QWidget):
         self.deselect_all()
         # Create a new transient connection
         self.active_connection = Connection(component, grip_index, side)
+        if hasattr(self.active_connection, "enable_auto_router"):
+            self.active_connection.enable_auto_router(True)
         # Position the end point at the start point initially
         self.active_connection.current_pos = self.active_connection.get_start_pos()
+        self.active_connection.update_path(self.components, self.connections)
         self.update()
 
     def get_logical_pos(self, pos):
@@ -385,20 +370,8 @@ class CanvasWidget(QWidget):
                 continue
 
             grips = comp.get_grips()
-            # Grip positions need to be mapped to logical!
-            # comp.get_grip_position returns coordinate relative to Widget (0,0) top left
-            # Widget top-left LOGICAL is comp.logical_rect.topLeft()
-            # So Global Logical Grip = comp.logical_rect.topLeft() + GripOffset
-             
             for i, _ in enumerate(grips):
-                # We need the logical grip position relative to component 
-                # Since get_grip_position relies on SVG rect which scales...
-                # Actually, comp.get_grip_position() returns pixel offsest at current size
-                # We need to un-scale it to get logical offset.
-                
-                visual_grip_pos = comp.get_grip_position(i) # Visual offset
-                logical_grip_offset = QPointF(visual_grip_pos.x() / self.zoom_level, visual_grip_pos.y() / self.zoom_level)
-                
+                logical_grip_offset = comp.get_logical_grip_position(i)
                 center = comp.logical_rect.topLeft() + logical_grip_offset
                 
                 dist = (pos - center).manhattanLength()

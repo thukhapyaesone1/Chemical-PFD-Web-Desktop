@@ -1,6 +1,7 @@
 from collections import defaultdict, deque
 
 class GraphValidator:
+    ENDPOINT_TOLERANCE = 3.0
 
     def __init__(self, components, connections):
         # We use the component instance itself as the node identifier
@@ -23,12 +24,48 @@ class GraphValidator:
 
         for conn in self.connections:
             # ONLY process connection if both ends are currently ON the canvas
-            if conn.start_component in self.components and conn.end_component in self.components:
+            if (
+                conn.start_component in self.components
+                and conn.end_component in self.components
+                and self._connection_has_valid_endpoints(conn)
+            ):
                 u = conn.start_component
                 v = conn.end_component
                 self.adj_list[u].append(v)
                 self.out_degree[u] += 1
                 self.in_degree[v] += 1
+
+    def _connection_has_valid_endpoints(self, conn):
+        if not getattr(conn, "path", None) or len(conn.path) < 2:
+            return False
+
+        start_anchor = self._get_anchor_point(conn.start_component, conn.start_grip_index)
+        end_anchor = self._get_anchor_point(conn.end_component, conn.end_grip_index)
+
+        return (
+            self._point_near_anchor(conn.path[0], start_anchor)
+            and self._point_near_anchor(conn.path[-1], end_anchor)
+        )
+
+    def _get_anchor_point(self, component, grip_index):
+        if (
+            component is None
+            or grip_index is None
+            or not hasattr(component, "logical_rect")
+            or not hasattr(component, "get_logical_grip_position")
+        ):
+            return None
+
+        return component.logical_rect.topLeft() + component.get_logical_grip_position(grip_index)
+
+    def _point_near_anchor(self, point, anchor):
+        if point is None or anchor is None:
+            return False
+
+        return (
+            abs(point.x() - anchor.x()) <= self.ENDPOINT_TOLERANCE
+            and abs(point.y() - anchor.y()) <= self.ENDPOINT_TOLERANCE
+        )
 
     def validate(self):
         isolated = self._find_isolated()

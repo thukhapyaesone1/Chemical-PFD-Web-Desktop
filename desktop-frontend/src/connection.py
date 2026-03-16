@@ -4,6 +4,9 @@ import math
 from src.auto_router import AutoRouter
 
 class Connection:
+    GRIP_SIDE_TOLERANCE = 8.0
+    OBSTACLE_CLEARANCE = 10.0
+
     def __init__(self, start_component, start_grip_index, start_side):
         self.start_component = start_component
         self.start_grip_index = start_grip_index
@@ -95,591 +98,235 @@ class Connection:
                         return i
         return -1
 
+    # ------------------------------------------------------------------
+    # PUBLIC ENTRY POINTS
+    # ------------------------------------------------------------------
+
     def calculate_path(self, components=None, other_connections=None, use_auto_router=None):
-        """
-        Calculate connection path with optional smart auto-routing.
-        
-        Args:
-            components: List of all components in canvas (for obstacle detection)
-            other_connections: List of other connections (for collision detection)
-            use_auto_router: Override auto-router setting (if None, use self.use_auto_router)
-        
-        Strategy:
-        1. If auto_router is enabled and components provided:
-           - Use BFS-based grid pathfinding with obstacle avoidance
-        2. Otherwise:
-           - Use rule-based heuristic routing (original logic)
-        """
-        # CRITICAL: Clear existing path completely to prevent stretching/partial updates
+        """Route this connection.  Always uses the clean orthogonal router."""
         self.path = []
         self.painter_path = QPainterPath()
-        
-        # Determine routing mode
-        should_use_auto_router = use_auto_router if use_auto_router is not None else self.use_auto_router
-        
-        if should_use_auto_router and components:
-            self._calculate_path_with_auto_router(components, other_connections)
+        self._route(components or [])
+
+    def enable_auto_router(self, enable: bool = True):
+        """Legacy hook kept for call-site compatibility – always uses clean router."""
+        self.use_auto_router = enable  # value ignored; kept for serialisation
+
+    # ------------------------------------------------------------------
+    # CLEAN ORTHOGONAL ROUTER
+    # ------------------------------------------------------------------
+
+    # Padding added around every obstacle rect
+    _PAD = 14.0
+    # Min stub length coming out of / going into a grip
+    _STUB = 20.0
+
+    def _route(self, components):
+        """
+        Produce a clean, minimal orthogonal path from start-grip to end-grip.
+
+        Strategy
+        --------
+        1. Compute a stub point just outside the start and end grips.
+        2. Try up to 4 candidate mid-points (horizontal-first, vertical-first,
+           and two bypass routes above/below / left/right of the bounding box
+           of all obstacles).
+        3. For each candidate build a 3- or 5-point path, score it by counting
+           how many obstacle rectangles it penetrates.
+        4. Pick the cleanest (lowest score) candidate.  Among ties pick shortest.
+        """
+        S = QPointF(self.get_start_pos())
+        E = QPointF(self.get_end_pos())
+
+        start_side = self._resolve_grip_side(self.start_component, self.start_grip_index, self.start_side)
+        target_side = self._resolve_target_side(S, E)
+
+        stub = max(self._STUB, self._STUB + self.start_adjust)
+        end_stub = max(self._STUB, self._STUB + self.end_adjust)
+
+        # Point one stub-length out from each grip
+        ns = self._stub_point(S, start_side, stub)
+        pe = self._stub_point(E, target_side, end_stub)
+
+        # Build obstacle rects (padded), excluding start/end/snap
+        blocked = [
+            comp.logical_rect.adjusted(-self._PAD, -self._PAD, self._PAD, self._PAD)
+            for comp in components
+            if hasattr(comp, "logical_rect")
+            and comp not in (self.start_component, self.end_component, self.snap_component)
+        ]
+
+        # Candidate midpoints – try horizontal-first and vertical-first corners,
+        # plus two bypass rows/columns around all obstacles combined.
+        candidates = self._candidate_paths(ns, pe, blocked)
+
+        best = min(candidates, key=lambda pts: (self._path_score(pts, blocked), self._path_len(pts)))
+        self.path = self._dedup(best)
+
+    def _stub_point(self, grip: QPointF, side: str, length: float) -> QPointF:
+        if side == "right":  return QPointF(grip.x() + length, grip.y())
+        if side == "left":   return QPointF(grip.x() - length, grip.y())
+        if side == "top":    return QPointF(grip.x(), grip.y() - length)
+        if side == "bottom": return QPointF(grip.x(), grip.y() + length)
+        return QPointF(grip.x() + length, grip.y())
+
+    def _candidate_paths(self, ns: QPointF, pe: QPointF, blocked: list) -> list:
+        """Return a list of candidate point-lists, each a full orthogonal path
+        from the start-grip through ns … pe to the end-grip."""
+        S = QPointF(self.get_start_pos())
+        E = QPointF(self.get_end_pos())
+        off = self.path_offset
+
+        paths = []
+
+        # --- 3-segment: horizontal-first (corner at ns.x→pe.y then pe) ------
+        # ns → (pe.x, ns.y) → pe
+        c1 = QPointF(pe.x(), ns.y())
+        paths.append([S, ns, c1, pe, E])
+
+        # --- 3-segment: vertical-first (corner at ns.y→pe.x then pe) --------
+        # ns → (ns.x, pe.y) → pe
+        c2 = QPointF(ns.x(), pe.y())
+        paths.append([S, ns, c2, pe, E])
+
+        # --- 5-segment bypass: route via midpoint row/column -----------------
+        if blocked:
+            all_left   = min(r.left()   for r in blocked)
+            all_right  = max(r.right()  for r in blocked)
+            all_top    = min(r.top()    for r in blocked)
+            all_bottom = max(r.bottom() for r in blocked)
         else:
-            self._calculate_path_rule_based()
-    
-    def _calculate_path_with_auto_router(self, components, other_connections=None):
-        """
-        Smart auto-routing using BFS pathfinding on a grid.
-        
-        Process:
-        1. Set up grid obstacles for all components
-        2. Add existing connections as obstacles
-        3. Use BFS to find shortest orthogonal path
-        4. Convert grid path to visual path points
-        """
-        # Reset router and obstacles
-        self.auto_router.clear_obstacles()
-        
-        # Add all component rectangles as obstacles
-        for comp in components:
-            if comp == self.start_component or comp == self.end_component:
-                continue  # Don't block start/end components
-            if hasattr(comp, 'logical_rect'):
-                self.auto_router.add_component_obstacle(comp.logical_rect)
-        
-        # Add existing connection segments as obstacles (optional - can be toggled)
-        if other_connections:
-            for conn in other_connections:
-                if conn == self:
-                    continue
-                if len(conn.path) >= 2:
-                    for i in range(len(conn.path) - 1):
-                        self.auto_router.add_connection_obstacle(conn.path[i], conn.path[i+1])
-        
-        # Get start and end positions
-        start_point = QPointF(self.get_start_pos())
-        end_point = QPointF(self.get_end_pos())
-        
-        # Calculate scene bounds (for pathfinding limit)
-        scene_bounds = self._calculate_scene_bounds(components)
-        
-        # Find shortest orthogonal path
-        path_points = self.auto_router.find_path(start_point, end_point, scene_bounds)
-        
-        # Convert to our path format and add start/end stubs
-        raw_path = self._add_stubs_to_grid_path(path_points)
-        
-        # CRITICAL: Ensure perfect orthogonality even for auto-routed paths
-        self.path = self._ensure_orthogonal_path(raw_path)
-    
-    def _calculate_path_rule_based(self):
-        """
-        Original rule-based orthogonal routing logic.
-        Determines the path points based on start/end positions and grip directions.
-        
-        This is the fallback/default routing strategy when auto-router is disabled.
-        Ports the logic from the reference project.
-        
-        IMPORTANT: All intermediate points are strictly aligned to ensure perfect orthogonality.
-        """
-        start_point = QPointF(self.get_start_pos())
-        points = [start_point]
-        end_point = QPointF(self.get_end_pos())
-        
-        # OFFSETS
-        # Base offset (20) + User Adjustments
-        # FIX: Clamp stubs to avoid inverting into component
-        off_start = max(10.0, 30.0 + self.start_adjust)
-        off_end = max(10.0, 20.0 + self.end_adjust)
-        
-        # Component Bounds (for smart avoidance - use LOGICAL RECT)
-        sitem = self.start_component.logical_rect
-        if self.end_component:
-            eitem = self.end_component.logical_rect
-        elif self.snap_component:
-            eitem = self.snap_component.logical_rect
-        else:
-            # Fake a small rect around the end point
-            eitem = QRectF(end_point.x()-10, end_point.y()-10, 20, 20)
+            cx = (ns.x() + pe.x()) / 2
+            cy = (ns.y() + pe.y()) / 2
+            all_left = cx; all_right = cx; all_top = cy; all_bottom = cy
 
-        # 1. Determine "Next to Start" (ns)
-        ns = QPointF()
-        if self.start_side == "top":
-            ns = QPointF(start_point.x(), start_point.y() - off_start)
-        elif self.start_side == "bottom":
-            ns = QPointF(start_point.x(), start_point.y() + off_start)
-        elif self.start_side == "left":
-            ns = QPointF(start_point.x() - off_start, start_point.y())
-        elif self.start_side == "right":
-            ns = QPointF(start_point.x() + off_start, start_point.y())
-        else: # Fallback
-            ns = QPointF(start_point.x() + off_start, start_point.y())
+        gap = self._PAD + 6.0
 
-        # 2. Determine "Previous to End" (pe)
-        pe = QPointF()
-        
-        # Priority: Final End Side -> Snap Side -> Heuristic
-        target_side = self.end_side
-        if not target_side and self.snap_side:
-            target_side = self.snap_side
-        if not target_side:
-            target_side = self._guess_approach_side(start_point, end_point)
-        
-        if target_side == "top":
-            pe = QPointF(end_point.x(), end_point.y() - off_end)
-        elif target_side == "bottom":
-            pe = QPointF(end_point.x(), end_point.y() + off_end)
-        elif target_side == "left":
-            pe = QPointF(end_point.x() - off_end, end_point.y())
-        elif target_side == "right":
-            pe = QPointF(end_point.x() + off_end, end_point.y())
-        else:
-             pe = QPointF(end_point.x() - off_end, end_point.y())
+        # bypass above all obstacles
+        by_top = all_top - gap + off
+        paths.append([S, ns,
+                       QPointF(ns.x(), by_top),
+                       QPointF(pe.x(), by_top),
+                       pe, E])
 
-        # 3. Intermediate Points Logic (The "Brain")
-        # Reuse 'self.path_offset' for the MIDDLE sections
-        # For U-turns, we add this to the bounding box edge to give space
-        off_mid = 20.0 + self.path_offset 
-        effective_end_offset = off_end 
+        # bypass below all obstacles
+        by_bot = all_bottom + gap + off
+        paths.append([S, ns,
+                       QPointF(ns.x(), by_bot),
+                       QPointF(pe.x(), by_bot),
+                       pe, E])
 
-        # Case A: Start Right
-        if self.start_side == "right":
-            if target_side == "left":
-                # Standard Horizontal Connection
-                if start_point.x() + off_start < end_point.x() - effective_end_offset:
-                     mid_x = (start_point.x() + end_point.x()) / 2 + self.path_offset
-                     points.append(QPointF(mid_x, start_point.y()))
-                     points.append(QPointF(mid_x, end_point.y()))
-                else: 
-                     # Overlap or simple Z
-                     # Route below the lowest component
-                     y = max(sitem.bottom(), eitem.bottom()) + off_mid
-                     
-                     points.append(ns)
-                     points.append(QPointF(ns.x(), y)) 
-                     points.append(QPointF(pe.x(), y))
-                     points.append(pe)
-            
-            elif target_side == "top":
-                 points.append(ns)
-                 points.append(QPointF(ns.x(), pe.y()))
-                 points.append(pe)
-            
-            elif target_side == "bottom":
-                 points.append(ns)
-                 points.append(QPointF(ns.x(), pe.y()))
-                 points.append(pe)
-                 
-            else: # right -> right (U-turn)
-                 # Route to the right of the right-most component
-                 x = max(sitem.right(), eitem.right()) + off_mid
-                 points.append(ns)
-                 points.append(QPointF(x, ns.y()))
-                 points.append(QPointF(x, pe.y()))
-                 points.append(pe)
+        # bypass left of all obstacles
+        by_left = all_left - gap + off
+        paths.append([S, ns,
+                       QPointF(by_left, ns.y()),
+                       QPointF(by_left, pe.y()),
+                       pe, E])
 
-        # Case B: Start Left
-        elif self.start_side == "left":
-            if target_side == "right":
-                 if start_point.x() - off_start > end_point.x() + effective_end_offset:
-                     mid_x = (start_point.x() + end_point.x()) / 2 + self.path_offset
-                     points.append(QPointF(mid_x, start_point.y()))
-                     points.append(QPointF(mid_x, end_point.y()))
-                 else:
-                     # Overlap
-                     # Route below
-                     y = max(sitem.bottom(), eitem.bottom()) + off_mid
-                     
-                     points.append(ns)
-                     points.append(QPointF(ns.x(), y))
-                     points.append(QPointF(pe.x(), y))
-                     points.append(pe)
-            
-            elif target_side == "top":
-                 points.append(ns)
-                 points.append(QPointF(ns.x(), pe.y()))
-                 points.append(pe)
-                 
-            elif target_side == "bottom":
-                 points.append(ns)
-                 points.append(QPointF(ns.x(), pe.y())) 
-                 points.append(pe)
-            
-            else: # left -> left
-                 # Route to the left of the left-most component
-                 x = min(sitem.left(), eitem.left()) - off_mid
-                 points.append(ns)
-                 points.append(QPointF(x, ns.y()))
-                 points.append(QPointF(x, pe.y()))
-                 points.append(pe)
+        # bypass right of all obstacles
+        by_right = all_right + gap + off
+        paths.append([S, ns,
+                       QPointF(by_right, ns.y()),
+                       QPointF(by_right, pe.y()),
+                       pe, E])
 
-        # Case C: Start Top
-        elif self.start_side == "top":
-            if target_side == "bottom":
-                if start_point.y() - off_start > end_point.y() + effective_end_offset:
-                    mid_y = (start_point.y() + end_point.y()) / 2 + self.path_offset
-                    points.append(QPointF(start_point.x(), mid_y))
-                    points.append(QPointF(end_point.x(), mid_y))
-                else: 
-                     # Overlap -> Route Right
-                     x = max(sitem.right(), eitem.right()) + off_mid
-                     points.append(ns)
-                     points.append(QPointF(x, ns.y()))
-                     points.append(QPointF(x, pe.y()))
-                     points.append(pe)
-            elif target_side == "left":
-                 points.append(ns)
-                 points.append(QPointF(pe.x(), ns.y()))
-                 points.append(pe)
-            elif target_side == "right":
-                 points.append(ns)
-                 points.append(QPointF(pe.x(), ns.y()))
-                 points.append(pe)
-            else: # top -> top
-                 # Route above
-                 y = min(sitem.top(), eitem.top()) - off_mid
-                 points.append(ns)
-                 points.append(QPointF(ns.x(), y))
-                 points.append(QPointF(pe.x(), y))
-                 points.append(pe)
+        return paths
 
-        # Case D: Start Bottom
-        elif self.start_side == "bottom":
-             if target_side == "top":
-                 if start_point.y() + off_start < end_point.y() - effective_end_offset:
-                     mid_y = (start_point.y() + end_point.y()) / 2 + self.path_offset
-                     points.append(QPointF(start_point.x(), mid_y))
-                     points.append(QPointF(end_point.x(), mid_y))
-                 else:
-                     # Overlap -> Route Right
-                     x = max(sitem.right(), eitem.right()) + off_mid
-                     points.append(ns)
-                     points.append(QPointF(x, ns.y()))
-                     points.append(QPointF(x, pe.y()))
-                     points.append(pe)
-             elif target_side == "left":
-                 points.append(ns)
-                 points.append(QPointF(pe.x(), ns.y()))
-                 points.append(pe)
-             elif target_side == "right":
-                 points.append(ns)
-                 points.append(QPointF(pe.x(), ns.y()))
-                 points.append(pe)
-             else: # bottom -> bottom
-                 # Route below
-                 y = max(sitem.bottom(), eitem.bottom()) + off_mid
-                 points.append(ns)
-                 points.append(QPointF(ns.x(), y))
-                 points.append(QPointF(pe.x(), y))
-                 points.append(pe)
+    # ------------------------------------------------------------------
+    # SCORING / GEOMETRY HELPERS
+    # ------------------------------------------------------------------
 
-        points.append(end_point)
-        points = self._avoid_components(points, obstacles)
-        self.path = self._simplify_path(points)
+    def _path_score(self, points: list, blocked: list) -> int:
+        """Count how many (segment, obstacle) pairs intersect."""
+        score = 0
+        for i in range(len(points) - 1):
+            for rect in blocked:
+                if self._seg_hits_rect(points[i], points[i + 1], rect):
+                    score += 1
+        return score
 
+    def _path_len(self, points: list) -> float:
+        total = 0.0
+        for i in range(len(points) - 1):
+            total += abs(points[i+1].x()-points[i].x()) + abs(points[i+1].y()-points[i].y())
+        return total
 
-    def _ensure_orthogonal_path(self, points: list) -> list:
-        """
-        Ensure all path segments are perfectly horizontal or vertical.
-        
-        This method converts any diagonal segments into proper orthogonal segments
-        by adding intermediate corner points where needed.
-        
-        Args:
-            points: List of QPointF representing the path
-        
-        Returns:
-            List of QPointF with guaranteed orthogonal segments
-        """
-        if len(points) < 2:
+    def _seg_hits_rect(self, p1: QPointF, p2: QPointF, rect: QRectF) -> bool:
+        """Axis-aligned segment vs padded rect intersection."""
+        if abs(p1.y() - p2.y()) < 0.5:          # horizontal
+            y = p1.y()
+            lo, hi = min(p1.x(), p2.x()), max(p1.x(), p2.x())
+            return rect.top() < y < rect.bottom() and hi > rect.left() and lo < rect.right()
+        if abs(p1.x() - p2.x()) < 0.5:           # vertical
+            x = p1.x()
+            lo, hi = min(p1.y(), p2.y()), max(p1.y(), p2.y())
+            return rect.left() < x < rect.right() and hi > rect.top() and lo < rect.bottom()
+        return False
+
+    def _dedup(self, points: list) -> list:
+        """Remove consecutive duplicate / collinear points."""
+        if not points:
             return points
-        
-        orthogonal_points = [points[0]]
-        
-        for i in range(1, len(points)):
-            prev = orthogonal_points[-1]
-            curr = points[i]
-            
-            dx = abs(curr.x() - prev.x())
-            dy = abs(curr.y() - prev.y())
-            
-            # Check if segment is already orthogonal (purely horizontal or vertical)
-            if dx < 0.1:  # Vertical segment
-                orthogonal_points.append(QPointF(prev.x(), curr.y()))
-            elif dy < 0.1:  # Horizontal segment
-                orthogonal_points.append(QPointF(curr.x(), prev.y()))
-            else:
-                # Diagonal segment - need to add corner point
-                # Decide routing based on which direction is dominant
-                # and what makes sense for the connection flow
-                
-                # Look ahead if possible to determine best routing
-                if i < len(points) - 1:
-                    next_pt = points[i + 1]
-                    dx_next = abs(next_pt.x() - curr.x())
-                    dy_next = abs(next_pt.y() - curr.y())
-                    
-                    # Choose direction that aligns better with next segment
-                    if dx_next < dy_next:
-                        # Next segment is more vertical, go horizontal first
-                        orthogonal_points.append(QPointF(curr.x(), prev.y()))
-                        orthogonal_points.append(QPointF(curr.x(), curr.y()))
-                    else:
-                        # Next segment is more horizontal, go vertical first
-                        orthogonal_points.append(QPointF(prev.x(), curr.y()))
-                        orthogonal_points.append(QPointF(curr.x(), curr.y()))
-                else:
-                    # Last segment - choose based on which direction is larger
-                    if dx > dy:
-                        # Go horizontal first, then vertical
-                        orthogonal_points.append(QPointF(curr.x(), prev.y()))
-                        orthogonal_points.append(QPointF(curr.x(), curr.y()))
-                    else:
-                        # Go vertical first, then horizontal
-                        orthogonal_points.append(QPointF(prev.x(), curr.y()))
-                        orthogonal_points.append(QPointF(curr.x(), curr.y()))
-        
-        # Remove duplicate consecutive points
-        filtered_points = [orthogonal_points[0]]
-        for i in range(1, len(orthogonal_points)):
-            if (abs(orthogonal_points[i].x() - filtered_points[-1].x()) > 0.1 or 
-                abs(orthogonal_points[i].y() - filtered_points[-1].y()) > 0.1):
-                filtered_points.append(orthogonal_points[i])
-        
-        return filtered_points
+        out = [points[0]]
+        for pt in points[1:]:
+            if abs(pt.x() - out[-1].x()) > 0.05 or abs(pt.y() - out[-1].y()) > 0.05:
+                out.append(pt)
+        # Collapse collinear triples
+        result = [out[0]]
+        for i in range(1, len(out) - 1):
+            a, b, c = result[-1], out[i], out[i+1]
+            if abs(a.x()-b.x()) < 0.05 and abs(b.x()-c.x()) < 0.05:
+                continue  # vertical collinear
+            if abs(a.y()-b.y()) < 0.05 and abs(b.y()-c.y()) < 0.05:
+                continue  # horizontal collinear
+            result.append(b)
+        if len(out) > 1:
+            result.append(out[-1])
+        return result
+
+    # ------------------------------------------------------------------
+    # SIDE-RESOLUTION HELPERS  (kept for _route / _candidate_paths)
+    # ------------------------------------------------------------------
+
+    def _resolve_grip_side(self, component, grip_index, fallback_side=None):
+        if (
+            component is None
+            or grip_index is None
+            or not hasattr(component, "logical_rect")
+            or not hasattr(component, "get_logical_grip_position")
+        ):
+            return fallback_side or "right"
+
+        local_pos = component.get_logical_grip_position(grip_index)
+        rect = component.logical_rect
+        distances = {
+            "left":   abs(local_pos.x()),
+            "right":  abs(rect.width()  - local_pos.x()),
+            "top":    abs(local_pos.y()),
+            "bottom": abs(rect.height() - local_pos.y()),
+        }
+        resolved = min(distances, key=lambda s: distances[s])
+        if distances[resolved] <= self.GRIP_SIDE_TOLERANCE:
+            return resolved
+        return fallback_side or resolved
+
+    def _resolve_target_side(self, start_point, end_point):
+        if self.end_component and self.end_grip_index is not None:
+            return self._resolve_grip_side(self.end_component, self.end_grip_index, self.end_side)
+        if self.snap_component and self.snap_grip_index is not None:
+            return self._resolve_grip_side(self.snap_component, self.snap_grip_index, self.snap_side)
+        if self.end_side:
+            return self.end_side
+        if self.snap_side:
+            return self.snap_side
+        return self._guess_approach_side(start_point, end_point)
 
     def _guess_approach_side(self, start, end):
-        # Heuristic to guess optimal entry side when dragging freely
         dx = end.x() - start.x()
         dy = end.y() - start.y()
-        
         if abs(dx) > abs(dy):
-            return "left" if dx > 0 else "right" # Entering from left means target is to right
-        else:
-            return "top" if dy > 0 else "bottom"
-    
-    def _add_stubs_to_grid_path(self, grid_path: list) -> list:
-        """
-        Enhance grid-based path with directional stubs from grips.
-        
-        The grid path provides the main routing, but we add:
-        - Start stub from grip in grip direction
-        - End stub approaching grip from specified direction
-        
-        Args:
-            grid_path: Path points from BFS pathfinding
-        
-        Returns:
-            Enhanced path with stubs (may need orthogonality enforcement after)
-        """
-        if len(grid_path) < 2:
-            return grid_path
-        
-        # Get start position with stub
-        start_point = QPointF(self.get_start_pos())
-        off_start = max(10.0, 30.0 + self.start_adjust)
-        
-        # Add start stub based on start_side direction
-        ns = QPointF()
-        if self.start_side == "top":
-            ns = QPointF(start_point.x(), start_point.y() - off_start)
-        elif self.start_side == "bottom":
-            ns = QPointF(start_point.x(), start_point.y() + off_start)
-        elif self.start_side == "left":
-            ns = QPointF(start_point.x() - off_start, start_point.y())
-        elif self.start_side == "right":
-            ns = QPointF(start_point.x() + off_start, start_point.y())
-        else:
-            ns = QPointF(start_point.x() + off_start, start_point.y())
-        
-        # Get end position with stub
-        end_point = QPointF(self.get_end_pos())
-        off_end = max(10.0, 20.0 + self.end_adjust)
-        
-        # Determine approach side for end
-        target_side = self.end_side
-        if not target_side and self.snap_side:
-            target_side = self.snap_side
-        if not target_side:
-            target_side = self._guess_approach_side(start_point, end_point)
-        
-        # Add end stub
-        pe = QPointF()
-        if target_side == "top":
-            pe = QPointF(end_point.x(), end_point.y() - off_end)
-        elif target_side == "bottom":
-            pe = QPointF(end_point.x(), end_point.y() + off_end)
-        elif target_side == "left":
-            pe = QPointF(end_point.x() - off_end, end_point.y())
-        elif target_side == "right":
-            pe = QPointF(end_point.x() + off_end, end_point.y())
-        else:
-            pe = QPointF(end_point.x() - off_end, end_point.y())
-        
-        # Construct final path with proper orthogonal connections
-        final_path = [start_point, ns]
-        
-        # Add intermediate point to connect ns to grid_path orthogonally
-        if len(grid_path) > 0:
-            first_grid = grid_path[0]
-            
-            # Create orthogonal connection from ns to first grid point
-            # Check which direction the stub goes
-            if abs(ns.x() - start_point.x()) < 0.1:
-                # Vertical stub, create horizontal connection to grid
-                bridge = QPointF(first_grid.x(), ns.y())
-                if abs(bridge.x() - ns.x()) > 1.0:  # Only add if needed
-                    final_path.append(bridge)
-            else:
-                # Horizontal stub, create vertical connection to grid
-                bridge = QPointF(ns.x(), first_grid.y())
-                if abs(bridge.y() - ns.y()) > 1.0:  # Only add if needed
-                    final_path.append(bridge)
-        
-        # Add all grid path points
-        final_path.extend(grid_path)
-        
-        # Add intermediate point to connect grid_path to pe orthogonally
-        if len(grid_path) > 0:
-            last_grid = grid_path[-1]
-            
-            # Create orthogonal connection from last grid point to pe
-            if abs(pe.x() - end_point.x()) < 0.1:
-                # Vertical end stub, create horizontal connection from grid
-                bridge = QPointF(pe.x(), last_grid.y())
-                if abs(bridge.x() - last_grid.x()) > 1.0:  # Only add if needed
-                    final_path.append(bridge)
-            else:
-                # Horizontal end stub, create vertical connection from grid
-                bridge = QPointF(last_grid.x(), pe.y())
-                if abs(bridge.y() - last_grid.y()) > 1.0:  # Only add if needed
-                    final_path.append(bridge)
-        
-        final_path.extend([pe, end_point])
-        
-        return final_path
-    
-    def _calculate_scene_bounds(self, components) -> QRectF:
-        """
-        Calculate bounding box of all components to limit pathfinding scope.
-        
-        Args:
-            components: List of all components
-        
-        Returns:
-            QRectF representing scene bounds with padding
-        """
-        if not components:
-            return QRectF(0, 0, 10000, 10000)  # Default large bounds
-        
-        # Find min/max coordinates
-        min_x = float('inf')
-        min_y = float('inf')
-        max_x = float('-inf')
-        max_y = float('-inf')
-        
-        for comp in components:
-            if hasattr(comp, 'logical_rect'):
-                rect = comp.logical_rect
-            else:
-                rect = QRectF(comp.pos(), comp.size() if hasattr(comp, 'size') else (100, 60))
-            
-            min_x = min(min_x, rect.x())
-            min_y = min(min_y, rect.y())
-            max_x = max(max_x, rect.right())
-            max_y = max(max_y, rect.bottom())
-        
-        # Add padding
-        padding = 500
-        return QRectF(
-            min_x - padding,
-            min_y - padding,
-            max_x - min_x + padding * 2,
-            max_y - min_y + padding * 2
-        )
-    
-    def enable_auto_router(self, enable: bool = True):
-        """Enable or disable smart auto-routing for this connection."""
-        self.use_auto_router = enable
-
-    def _avoid_components(self, points, obstacles):
-        if not obstacles or len(points) < 2:
-            return points
-
-        blocked_components = []
-        for comp in obstacles:
-            if comp in (self.start_component, self.end_component, self.snap_component):
-                continue
-            if hasattr(comp, "logical_rect"):
-                blocked_components.append(comp)
-
-        if not blocked_components:
-            return points
-
-        routed = list(points)
-        for _ in range(2):
-            changed = False
-            result = [routed[0]]
-            for i in range(len(routed) - 1):
-                p1 = result[-1]
-                p2 = routed[i + 1]
-
-                detoured = False
-                for comp in blocked_components:
-                    rect = comp.logical_rect.adjusted(-10, -10, 10, 10)
-                    detour_path = self._detour_segment_around_rect(p1, p2, rect)
-                    if detour_path:
-                        for pt in detour_path[1:]:
-                            result.append(pt)
-                        detoured = True
-                        changed = True
-                        break
-
-                if not detoured:
-                    result.append(p2)
-
-            routed = result
-            if not changed:
-                break
-
-        return routed
-
-    def _detour_segment_around_rect(self, p1, p2, rect):
-        is_horizontal = abs(p1.y() - p2.y()) < 0.5
-        is_vertical = abs(p1.x() - p2.x()) < 0.5
-
-        if is_horizontal:
-            y = p1.y()
-            min_x = min(p1.x(), p2.x())
-            max_x = max(p1.x(), p2.x())
-            intersects = (rect.top() <= y <= rect.bottom()) and (max_x > rect.left()) and (min_x < rect.right())
-            if not intersects:
-                return None
-
-            top_y = rect.top()
-            bottom_y = rect.bottom()
-            bypass_y = top_y if abs(y - top_y) <= abs(y - bottom_y) else bottom_y
-            return [
-                p1,
-                QPointF(p1.x(), bypass_y),
-                QPointF(p2.x(), bypass_y),
-                p2,
-            ]
-
-        if is_vertical:
-            x = p1.x()
-            min_y = min(p1.y(), p2.y())
-            max_y = max(p1.y(), p2.y())
-            intersects = (rect.left() <= x <= rect.right()) and (max_y > rect.top()) and (min_y < rect.bottom())
-            if not intersects:
-                return None
-
-            left_x = rect.left()
-            right_x = rect.right()
-            bypass_x = left_x if abs(x - left_x) <= abs(x - right_x) else right_x
-            return [
-                p1,
-                QPointF(bypass_x, p1.y()),
-                QPointF(bypass_x, p2.y()),
-                p2,
-            ]
-
-        return None
+            return "left" if dx > 0 else "right"
+        return "top" if dy > 0 else "bottom"
 
     def _simplify_path(self, points):
         if len(points) < 3:
