@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QFileDialog, QComboBox
 )
+from PyQt5.QtCore import Qt
 
 from src.api_client import post_component, get_components
 from src.grip_editor_dialog import GripEditorDialog
@@ -18,6 +19,7 @@ class AddSymbolDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(480)
         self.setMinimumHeight(800)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         # Store theme for child dialogs
         self.current_theme = theme
@@ -82,10 +84,22 @@ class AddSymbolDialog(QDialog):
 
         scroll.setWidget(container)
 
-        # Header
+        # Header with Help Button
+        header_layout = QHBoxLayout()
+        
         title = QLabel("Add New Symbol")
         title.setStyleSheet("font-size: 20px; font-weight: 600; margin-bottom: 10px;")
-        layout.addWidget(title)
+        header_layout.addWidget(title)
+        
+        header_layout.addStretch()
+        
+        self.help_btn = QPushButton("i")
+        self.help_btn.setObjectName("helpCircleBtn")
+        self.help_btn.setFixedSize(30, 30)
+        self.help_btn.clicked.connect(self.show_help)
+        header_layout.addWidget(self.help_btn)
+        
+        layout.addLayout(header_layout)
 
         # --- Input Fields ---
         self.name = self._line(layout, "Component Name", "e.g. My Custom Heat Exchanger")
@@ -239,6 +253,22 @@ class AddSymbolDialog(QDialog):
             }}
             QPushButton#submitBtn:hover {{
                 background-color: {submit_hover};
+            }}
+
+            QPushButton#helpCircleBtn {{
+                background-color: transparent;
+                border: 2px solid {btn_border};
+                border-radius: 15px;
+                color: {btn_border};
+                padding: 0;
+                font-family: serif;
+                font-size: 16px;
+                font-style: italic;
+                font-weight: bold;
+            }}
+            QPushButton#helpCircleBtn:hover {{
+                background-color: {btn_border};
+                color: {bg_main};
             }}
             
             QScrollArea {{
@@ -396,3 +426,59 @@ class AddSymbolDialog(QDialog):
             except Exception:
                 grip_count = 0
             self.grips_status.setText(f"Grips: {grip_count} configured")
+
+    def show_help(self):
+        help_dialog = QDialog(self)
+        help_dialog.setWindowTitle("Help / Info")
+        help_dialog.setWindowFlags(help_dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        help_dialog.setModal(True)
+        help_dialog.setMinimumWidth(400)
+        
+        # Inherit main dialog stylesheet for perfect theme consistency
+        help_dialog.setStyleSheet(self.styleSheet())
+        
+        layout = QVBoxLayout(help_dialog)
+        layout.setSpacing(15)
+        
+        help_text = """
+        <h3 style="margin-top:0; margin-bottom:5px; font-weight:600;">Required Files</h3>
+        <ul style="margin-top:0;">
+            <li><span style="font-weight:600;">PNG</span> :- used for toolbar display</li>
+            <li><span style="font-weight:600;">SVG</span> :- used for canvas rendering</li>
+        </ul>
+        
+        <h3 style="margin-bottom:5px; font-weight:600;">Fields Explanation</h3>
+        <ul style="margin-top:0;">
+            <li><span style="font-weight:600;">Component Name</span> :- Custom name</li>
+            <li><span style="font-weight:600;">Category</span> :- Select existing category</li>
+            <li><span style="font-weight:600;">New Category</span> :- Create new group</li>
+            <li><span style="font-weight:600;">Legend</span> :- Used for label prefix</li>
+            <li><span style="font-weight:600;">Suffix</span> :- Optional label suffix</li>
+        </ul>
+        
+        <h3 style="margin-bottom:5px; font-weight:600;">Label Format</h3>
+        <p style="margin-top:0;">Example: Legend-Count-Suffix :- <span style="font-weight:600;">P-01-A</span></p>
+        
+        <h3 style="margin-bottom:5px; font-weight:600;">Grip / Connector Info</h3>
+        <p style="margin-top:0;">Grips are connection points for linking components.<br>
+        Must be defined using the Grip Editor after SVG upload.</p>
+        """
+        
+        label = QLabel(help_text)
+        label.setWordWrap(True)
+        label.setTextFormat(Qt.RichText)
+        
+        # Ensure the text adopts the correct theme color and clean system font
+        label.setStyleSheet("font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 400; line-height: 1.4;")
+        layout.addWidget(label)
+        
+        close_btn = QPushButton("Close")
+        close_btn.setObjectName("submitBtn")
+        close_btn.clicked.connect(help_dialog.accept)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(close_btn)
+        
+        layout.addLayout(btn_layout)
+        help_dialog.exec_()
