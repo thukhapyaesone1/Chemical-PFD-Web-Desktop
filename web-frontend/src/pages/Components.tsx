@@ -50,12 +50,11 @@ export default function Components() {
   const [legend, setLegend] = useState("");
   const [suffix, setSuffix] = useState("");
 
-  // Interactive Grip State
-  const [activeGripIndex, setActiveGripIndex] = useState<number | null>(0);
-  const imageRef = useRef<HTMLImageElement>(null);
-
   // UI View State
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isGripEditorOpen, setIsGripEditorOpen] = useState(false);
+  const [tempGrips, setTempGrips] = useState<EditableGrip[]>([]);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   // Edit State
   const [editingComponent, setEditingComponent] = useState<{
@@ -75,75 +74,30 @@ export default function Components() {
 
       reader.onloadend = () => {
         if (type === "icon") setIconFile(reader.result as string);
-        else setSvgFile(reader.result as string);
+        else {
+          setSvgFile(reader.result as string);
+          if (e.target.files) {
+            setTempGrips([...grips]);
+            setIsGripEditorOpen(true);
+          }
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleGripCountChange = (count: number) => {
-    if (count < 0) return;
-
-    setGrips((prev) => {
-      if (count > prev.length) {
-        // Add new grips
-        const newGrips = [...prev];
-
-        for (let i = prev.length; i < count; i++) {
-          newGrips.push({ x: 50, y: 50, side: "right" });
-        }
-
-        return newGrips;
-      } else {
-        // Remove grips
-        return prev.slice(0, count);
-      }
-    });
-
-    // Reset active index logic if needed
-    if (count > 0 && (activeGripIndex === null || activeGripIndex >= count)) {
-      setActiveGripIndex(0);
-    } else if (count === 0) {
-      setActiveGripIndex(null);
-    }
-  };
-
-  const updateGrip = (index: number, field: keyof EditableGrip, value: any) => {
-    const newGrips = [...grips];
-
-    newGrips[index] = { ...newGrips[index], [field]: value };
-    setGrips(newGrips);
-  };
-
-  const removeGrip = (index: number) => {
-    const newGrips = grips.filter((_, i) => i !== index);
-
-    setGrips(newGrips);
-    // Adjust active index
-    if (activeGripIndex === index) {
-      setActiveGripIndex(null);
-    } else if (activeGripIndex !== null && activeGripIndex > index) {
-      setActiveGripIndex(activeGripIndex - 1);
-    }
-  };
-
-  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (activeGripIndex === null || activeGripIndex >= grips.length) return;
-
-    // Use currentTarget (the wrapper) to get accurate dimensions relative to the image
+  const handleEditorImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Calculate percentage relative to wrapper dimensions (which match image dimensions)
     const xPercent = parseFloat(((x / rect.width) * 100).toFixed(4));
     const yPercent = parseFloat(((y / rect.height) * 100).toFixed(4));
 
     const clampedX = Math.max(0, Math.min(100, xPercent));
     const clampedY = Math.max(0, Math.min(100, yPercent));
 
-    // Determine side based on proximity to edges (simple heuristic)
-    let side: "top" | "bottom" | "left" | "right" = grips[activeGripIndex].side;
+    let side: "top" | "bottom" | "left" | "right" = "right";
     const distTop = clampedY;
     const distBottom = 100 - clampedY;
     const distLeft = clampedX;
@@ -155,15 +109,23 @@ export default function Components() {
     else if (minDist === distLeft) side = "left";
     else if (minDist === distRight) side = "right";
 
-    const newGrips = [...grips];
+    setTempGrips([...tempGrips, { x: clampedX, y: 100 - clampedY, side }]);
+  };
 
-    newGrips[activeGripIndex] = { x: clampedX, y: 100 - clampedY, side };
-    setGrips(newGrips);
+  const removeTempGrip = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newGrips = tempGrips.filter((_, i) => i !== index);
+    setTempGrips(newGrips);
+  };
 
-    // Auto-advance
-    if (activeGripIndex < grips.length - 1) {
-      setActiveGripIndex(activeGripIndex + 1);
-    }
+  const openGripEditor = () => {
+    setTempGrips([...grips]);
+    setIsGripEditorOpen(true);
+  };
+
+  const saveGripsFromEditor = () => {
+    setGrips(tempGrips);
+    setIsGripEditorOpen(false);
   };
 
   // Open modal specific for editing
@@ -186,7 +148,7 @@ export default function Components() {
     const initialGrips = item.grips ? item.grips.map((g) => ({ ...g })) : [];
 
     setGrips(initialGrips);
-    setActiveGripIndex(initialGrips.length > 0 ? 0 : null);
+    setTempGrips(initialGrips);
 
     onOpen();
   };
@@ -202,7 +164,7 @@ export default function Components() {
     setIconFile(null);
     setSvgFile(null);
     setGrips([]);
-    setActiveGripIndex(null);
+    setTempGrips([]);
     onOpen();
   };
 
@@ -282,7 +244,8 @@ export default function Components() {
   const categories = Object.keys(components);
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
+    <>
+      <div className="p-8 h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
@@ -521,155 +484,58 @@ export default function Components() {
                     </div>
                   </div>
 
-                  {/* Right Column: Grip Editor */}
+                  {/* Right Column: Grip Editor Summary */}
                   <div className="space-y-4">
                     <h3 className="font-semibold text-gray-700 dark:text-gray-300">
-                      Grip Configuration
+                      Grips & Connectors
                     </h3>
-
-                    {/* Grip Count Input */}
-                    <div className="flex items-center justify-between gap-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <label className="text-sm font-medium">
-                        Number of Grips:
-                      </label>
-                      <Input
-                        className="w-24"
-                        max={20}
-                        min={0}
-                        type="number"
-                        value={grips.length.toString()}
-                        onValueChange={(v) =>
-                          handleGripCountChange(parseInt(v) || 0)
-                        }
-                      />
+                    
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="text-sm font-medium">Total Grips Configured:</span>
+                        <span className="text-xl font-bold text-primary">{grips.length}</span>
+                      </div>
+                      
+                      <Button
+                        color="primary"
+                        variant="flat"
+                        className="w-full"
+                        onPress={openGripEditor}
+                        isDisabled={!svgFile}
+                        startContent={<span>🎯</span>}
+                      >
+                        {grips.length > 0 ? "Edit Grips" : "Configure Grips"}
+                      </Button>
+                      
+                      {!svgFile && (
+                        <p className="text-xs text-gray-400 mt-2 text-center">
+                          Upload a Canvas SVG to configure grips
+                        </p>
+                      )}
                     </div>
-
-                    {/* Preview Area */}
-                    <div className="relative w-full aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden p-4">
-                      {svgFile ? (
-                        <div
-                          className="relative inline-flex justify-center items-center cursor-crosshair group"
-                          style={{ maxWidth: "100%", maxHeight: "100%" }}
-                          onClick={handleImageClick}
-                        >
+                    
+                    {/* Small preview of the SVG with purely visual dots, NO interactivity */}
+                    {svgFile && (
+                      <div className="relative w-full aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden p-4 pointer-events-none">
+                        <div className="relative inline-block">
                           <img
-                            ref={imageRef}
                             alt="Grip Preview"
-                            className="max-w-full max-h-full object-contain pointer-events-none select-none"
+                            className="w-auto h-auto max-w-full max-h-[160px]"
                             src={svgFile}
-                            style={{ width: "auto", height: "auto" }}
                           />
-
-                          {/* Grip Markers */}
                           {grips.map((grip, idx) => (
-                            <div
-                              key={idx}
-                              className={`absolute w-5 h-5 -ml-2.5 -mt-2.5 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-transform hover:scale-125
-                                                                ${activeGripIndex === idx ? "bg-primary text-white border-white ring-2 ring-primary/50" : "bg-white text-gray-700 border-gray-400"}
-                                                            `}
-                              style={{
-                                left: `${grip.x}%`,
-                                top: `${100 - Number(grip.y)}%`,
-                              }}
-                              // Stop propagation
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveGripIndex(idx);
-                              }}
-                            >
-                              {idx + 1}
-                            </div>
+                             <div
+                                key={idx}
+                                className="absolute w-3 h-3 -ml-1.5 -mt-1.5 rounded-full bg-primary ring-2 ring-white select-none pointer-events-none"
+                                style={{
+                                  left: `${grip.x}%`,
+                                  top: `${100 - Number(grip.y)}%`,
+                                }}
+                              />
                           ))}
-
-                          {/* Hover hint removed as requested/implied for cleanliness */}
                         </div>
-                      ) : (
-                        <div className="text-center text-gray-400 p-4">
-                          <p>
-                            Upload an SVG/Image to place grips interactively
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Grip List */}
-                    <div className="space-y-2 max-h-60 overflow-y-auto p-1 text-sm">
-                      {grips.map((grip, idx) => (
-                        <div
-                          key={idx}
-                          className={`
-                                                        grid grid-cols-12 gap-2 items-center p-2 rounded-lg border transition-colors cursor-pointer
-                                                        ${activeGripIndex === idx ? "bg-primary/5 border-primary" : "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"}
-                                                    `}
-                          onClick={() => setActiveGripIndex(idx)}
-                        >
-                          <div className="col-span-1 flex justify-center">
-                            <div
-                              className={`h-5 w-5 rounded-full flex items-center justify-center text-xs font-bold
-                                                             ${activeGripIndex === idx ? "bg-primary text-white" : "bg-gray-200 text-gray-500"}
-                                                        `}
-                            >
-                              {idx + 1}
-                            </div>
-                          </div>
-                          <div className="col-span-10 grid grid-cols-3 gap-2">
-                            <Input
-                              classNames={{ input: "text-right" }}
-                              size="sm"
-                              startContent={
-                                <span className="text-xs text-gray-400">
-                                  X%
-                                </span>
-                              }
-                              type="text"
-                              value={grip.x.toString()}
-                              onValueChange={(v) => updateGrip(idx, "x", v)}
-                            />
-                            <Input
-                              classNames={{ input: "text-right" }}
-                              size="sm"
-                              startContent={
-                                <span className="text-xs text-gray-400">
-                                  Y%
-                                </span>
-                              }
-                              type="text"
-                              value={grip.y.toString()}
-                              onValueChange={(v) => updateGrip(idx, "y", v)}
-                            />
-                            <Select
-                              aria-label="Grip Side"
-                              selectedKeys={[grip.side]}
-                              size="sm"
-                              onChange={(e) =>
-                                updateGrip(idx, "side", e.target.value)
-                              }
-                            >
-                              <SelectItem key="top">Top</SelectItem>
-                              <SelectItem key="bottom">Bottom</SelectItem>
-                              <SelectItem key="left">Left</SelectItem>
-                              <SelectItem key="right">Right</SelectItem>
-                            </Select>
-                          </div>
-                          <div className="col-span-1 flex justify-end">
-                            <Button
-                              isIconOnly
-                              color="danger"
-                              size="sm"
-                              variant="light"
-                              onPress={() => removeGrip(idx)}
-                            >
-                              <span className="text-lg">×</span>
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                      {grips.length === 0 && (
-                        <div className="text-center text-gray-400 italic py-2">
-                          Set number of grips above
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </ModalBody>
@@ -699,5 +565,68 @@ export default function Components() {
         </ModalContent>
       </Modal>
     </div>
+
+      {/* Interactive Grip Editor Popup */}
+      <Modal 
+        isOpen={isGripEditorOpen} 
+        onOpenChange={setIsGripEditorOpen}
+        size="3xl"
+        isDismissable={false}
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">Interactive Grip Editor</ModalHeader>
+          <ModalBody>
+            <p className="text-sm text-gray-500 mb-2">
+              Click anywhere inside the highlighted boundary to add a connection point. Click an existing point to remove it.
+            </p>
+            <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex justify-center items-center overflow-auto p-8 min-h-[40vh] max-h-[60vh]">
+               {svgFile && (
+                  <div
+                    className="relative inline-block cursor-crosshair group shadow-sm ring-1 ring-gray-400 dark:ring-gray-500 bg-white dark:bg-gray-900"
+                    onClick={handleEditorImageClick}
+                  >
+                    <img
+                      ref={imageRef}
+                      alt="Interactive Grip Area"
+                      className="w-auto h-auto min-w-[300px] max-w-full"
+                      style={{ maxHeight: '50vh' }}
+                      src={svgFile}
+                      draggable={false}
+                    />
+
+                    {tempGrips.map((grip, idx) => (
+                      <div
+                        key={idx}
+                        className="absolute w-6 h-6 -ml-3 -mt-3 rounded-full flex items-center justify-center text-xs font-bold border-2 bg-primary text-white border-white ring-2 ring-primary/50 transition-transform hover:scale-125 hover:bg-danger hover:border-danger hover:ring-danger/50 cursor-pointer shadow-md"
+                        style={{
+                          left: `${grip.x}%`,
+                          top: `${100 - Number(grip.y)}%`,
+                        }}
+                        onClick={(e) => removeTempGrip(idx, e)}
+                        title="Click to remove"
+                      >
+                        {idx + 1}
+                      </div>
+                    ))}
+                  </div>
+               )}
+            </div>
+            <div className="flex justify-between items-center mt-2 mb-1">
+               <span className="font-semibold text-gray-700 dark:text-gray-300">
+                  Total Connectors: {tempGrips.length}
+               </span>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+             <Button color="danger" variant="light" onPress={() => setIsGripEditorOpen(false)}>
+                Cancel
+             </Button>
+             <Button color="primary" onPress={saveGripsFromEditor}>
+                Confirm & Save
+             </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </>
   );
 }
