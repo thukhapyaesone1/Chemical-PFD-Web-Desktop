@@ -34,17 +34,37 @@ import {
   CanvasPropertiesSidebar,
   ComponentLibrarySidebar,
 } from "@/components/Canvas/ComponentLibrarySidebar";
-import { moveSegment, findSegmentIndex, snap } from "@/utils/pathfinding/segmentDrag";
-import { optimizePath, enforceManhattanShape } from "@/utils/pathfinding/optimize";
-import { getPaddedObstacleRects, pathHitsObstacle } from "@/utils/pathfinding/obstacles";
+import {
+  moveSegment,
+  findSegmentIndex,
+  snap,
+} from "@/utils/pathfinding/segmentDrag";
+import {
+  optimizePath,
+  enforceManhattanShape,
+} from "@/utils/pathfinding/optimize";
+import {
+  getPaddedObstacleRects,
+  pathHitsObstacle,
+} from "@/utils/pathfinding/obstacles";
 
 import ExportModal from "@/components/Canvas/ExportModal";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { useComponents } from "@/context/ComponentContext";
-import { calculateManualPathsWithBridges, getGripPosition, getStandoff, smartRoute } from "@/utils/routing";
+import {
+  calculateManualPathsWithBridges,
+  getGripPosition,
+  getStandoff,
+  smartRoute,
+} from "@/utils/routing";
 // import { exportDiagram, downloadBlob } from "@/utils/exports";
 import { ExportReportModal } from "@/components/Canvas/ExportReportModal";
-import { ExportOptions, type CanvasItem, type ComponentItem, type Connection } from "@/components/Canvas/types";
+import {
+  ExportOptions,
+  type CanvasItem,
+  type ComponentItem,
+  type Connection,
+} from "@/components/Canvas/types";
 import { NewProjectModal } from "@/components/NewProjectModal";
 import { SaveConfirmationModal } from "@/components/SaveConfirmationModal";
 import { UnsavedChangesModal } from "@/components/UnsavedChangesModal";
@@ -92,6 +112,7 @@ const resolveImageUrl = (url: string) => {
 };
 
 export default function Editor() {
+  const [showAIModal, setShowAIModal] = useState(false);
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -347,8 +368,7 @@ export default function Editor() {
         className="absolute inset-0 z-50 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm border-4 border-dashed border-blue-400 rounded-lg"
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
+        onDrop={handleDrop}>
         <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-2xl">
           <TbFileImport className="w-16 h-16 text-blue-500 mx-auto mb-4" />
           <p className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">
@@ -1604,8 +1624,7 @@ export default function Editor() {
                 } else {
                   navigate("/dashboard");
                 }
-              }}
-            >
+              }}>
               ←
             </Button>
           </Tooltip>
@@ -1616,8 +1635,7 @@ export default function Editor() {
               <Button
                 className="text-gray-700 dark:text-gray-300"
                 size="sm"
-                variant="light"
-              >
+                variant="light">
                 Edit
               </Button>
             </DropdownTrigger>
@@ -1627,8 +1645,7 @@ export default function Editor() {
                 [!canUndo && "undo", !canRedo && "redo"].filter(
                   Boolean,
                 ) as string[]
-              }
-            >
+              }>
               <DropdownItem key="undo" onPress={handleUndo}>
                 Undo (Ctrl+Z)
               </DropdownItem>
@@ -1655,8 +1672,7 @@ export default function Editor() {
                     setSelectedItemIds(new Set());
                     setSelectedConnectionIds(new Set());
                   }
-                }}
-              >
+                }}>
                 Delete Selected (d)
               </DropdownItem>
               <DropdownItem key="clear" onPress={handleClearSelection}>
@@ -1670,8 +1686,7 @@ export default function Editor() {
               <Button
                 className="text-gray-700 dark:text-gray-300"
                 size="sm"
-                variant="light"
-              >
+                variant="light">
                 View
               </Button>
             </DropdownTrigger>
@@ -1705,8 +1720,7 @@ export default function Editor() {
             className="border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
             size="sm"
             variant="bordered"
-            onPress={handleNewProjectClick}
-          >
+            onPress={handleNewProjectClick}>
             New Project
           </Button>
           <Button
@@ -1723,8 +1737,7 @@ export default function Editor() {
               input.accept = ".pfd";
               input.onchange = (e) => handleImportDiagram(e as any);
               input.click();
-            }}
-          >
+            }}>
             Import
           </Button>
           <Button
@@ -1732,8 +1745,7 @@ export default function Editor() {
             size="sm"
             startContent={<FiDownload />}
             variant="bordered"
-            onPress={() => setShowExportModal(true)}
-          >
+            onPress={() => setShowExportModal(true)}>
             Export
           </Button>
           <Button
@@ -1741,17 +1753,22 @@ export default function Editor() {
             size="sm"
             startContent={<FiDownload />}
             variant="bordered"
-            onPress={() => setShowReportModal(true)}
-          >
+            onPress={() => setShowReportModal(true)}>
             Generate Report
           </Button>
-
+          <Button
+            className="border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
+            size="sm"
+            startContent={<span>⚡</span>}
+            variant="bordered"
+            onPress={() => setShowAIModal(true)}>
+            AI Generate
+          </Button>
           <Button
             className="bg-blue-600 text-white hover:bg-blue-700"
             isDisabled={!projectId}
             size="sm"
-            onPress={() => setShowSaveModal(true)}
-          >
+            onPress={() => setShowSaveModal(true)}>
             Save Changes
           </Button>
         </div>
@@ -1766,8 +1783,7 @@ export default function Editor() {
             minmax(0, 1fr)
             ${rightCollapsed ? "48px" : "288px"}
           `,
-        }}
-      >
+        }}>
         {/* Left Sidebar - Component Library */}
         <div className="relative overflow-hidden border-r border-gray-200 dark:border-gray-800">
           {!leftCollapsed && (
@@ -1822,8 +1838,7 @@ export default function Editor() {
 
             // Otherwise, it's a component drag from the sidebar
             handleDrop(e);
-          }}
-        >
+          }}>
           <FileDropZone />
 
           {/* Left Sidebar Collapse Button */}
@@ -1837,8 +1852,7 @@ export default function Editor() {
             hover:border-blue-400/50 dark:hover:border-blue-500/50
             group pointer-events-auto"
             title={leftCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            onClick={() => setLeftCollapsed((v) => !v)}
-          >
+            onClick={() => setLeftCollapsed((v) => !v)}>
             {!leftCollapsed ? (
               <TbLayoutSidebarLeftCollapse className="w-5 h-5 text-gray-600 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
             ) : (
@@ -1857,8 +1871,7 @@ export default function Editor() {
             hover:border-blue-400/50 dark:hover:border-blue-500/50
             group pointer-events-auto"
             title={rightCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            onClick={() => setRightCollapsed((v: boolean) => !v)}
-          >
+            onClick={() => setRightCollapsed((v: boolean) => !v)}>
             {!rightCollapsed ? (
               <TbLayoutSidebarRightCollapse className="w-5 h-5 text-gray-600 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
             ) : (
@@ -1909,8 +1922,7 @@ export default function Editor() {
               handleStageMouseMove();
             }}
             onMouseUp={handleStageMouseUp}
-            onWheel={handleWheel}
-          >
+            onWheel={handleWheel}>
             <GridLayer
               gridSize={gridSize}
               height={stageSize.height}
@@ -1931,7 +1943,11 @@ export default function Editor() {
                     pathData={connectionPaths[connection.id]?.pathData}
                     segments={connectionPaths[connection.id]?.segments}
                     targetPosition={connectionPaths[connection.id]?.endPoint}
-                    onSegmentDragEnd={(segment: any, dx: number, dy: number) => {
+                    onSegmentDragEnd={(
+                      segment: any,
+                      dx: number,
+                      dy: number,
+                    ) => {
                       if (!projectId) return;
 
                       // Phase 4: jitter guard — ignore micro drags
@@ -1942,9 +1958,9 @@ export default function Editor() {
                       // Resolve the current path from stored waypoints
                       // pathMeta.waypoints contains all bend points between standoff ends
                       const currentPath: { x: number; y: number }[] =
-                        (pathMeta?.waypoints && pathMeta.waypoints.length > 0)
+                        pathMeta?.waypoints && pathMeta.waypoints.length > 0
                           ? pathMeta.waypoints
-                          : (connection.waypoints || []);
+                          : connection.waypoints || [];
 
                       if (currentPath.length === 0) return;
 
@@ -1978,10 +1994,16 @@ export default function Editor() {
                       }));
 
                       // Get padded obstacles for drag check
-                      const obstacles = getPaddedObstacleRects(droppedItems, 20);
+                      const obstacles = getPaddedObstacleRects(
+                        droppedItems,
+                        20,
+                      );
 
                       // Post-process: re-optimize and enforce clean shape
-                      const clean = enforceManhattanShape(optimizePath(snapped), obstacles);
+                      const clean = enforceManhattanShape(
+                        optimizePath(snapped),
+                        obstacles,
+                      );
 
                       // Phase 6: Add rejection logic
                       if (pathHitsObstacle(clean, obstacles)) {
@@ -2090,16 +2112,14 @@ export default function Editor() {
                 {/* Show Grid Button */}
                 <Tooltip
                   content={showGrid ? "Hide Grid" : "Show Grid"}
-                  placement="top"
-                >
+                  placement="top">
                   <button
                     aria-label="Toggle Grid Visibility"
                     className={`w-8 h-8 flex items-center justify-center rounded-md 
         border border-gray-300 dark:border-gray-700 
         bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 
         transition-all duration-150`}
-                    onClick={() => setShowGrid((prev) => !prev)}
-                  >
+                    onClick={() => setShowGrid((prev) => !prev)}>
                     {showGrid ? (
                       <TbGridDots className="w-4 h-4 text-gray-600 dark:text-gray-300" />
                     ) : (
@@ -2111,8 +2131,7 @@ export default function Editor() {
                 {/* Snap to Grid Switch */}
                 <Tooltip
                   content={snapToGrid ? "Snap Enabled" : "Snap Disabled"}
-                  placement="top"
-                >
+                  placement="top">
                   <Switch
                     aria-label="Snap to Grid"
                     color="primary"
@@ -2172,8 +2191,7 @@ export default function Editor() {
                 transition-all duration-200"
                   disabled={stageScale <= 0.1}
                   title="Zoom Out"
-                  onClick={handleZoomOut}
-                >
+                  onClick={handleZoomOut}>
                   <MdZoomOut className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                 </button>
 
@@ -2183,8 +2201,7 @@ export default function Editor() {
                     className="px-3 py-1.5 text-sm font-medium
                 bg-gray-50 dark:bg-gray-800 
                 rounded-l-md
-                text-gray-700 dark:text-gray-300"
-                  >
+                text-gray-700 dark:text-gray-300">
                     {Math.round(stageScale * 100)}%
                   </div>
                 </div>
@@ -2199,8 +2216,7 @@ export default function Editor() {
                 transition-all duration-200"
                   disabled={droppedItems.length === 0}
                   title="Center to Content"
-                  onClick={handleCenterToContent}
-                >
+                  onClick={handleCenterToContent}>
                   <MdCenterFocusWeak className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                 </button>
 
@@ -2214,8 +2230,7 @@ export default function Editor() {
                 transition-all duration-200"
                   disabled={stageScale >= 3}
                   title="Zoom In"
-                  onClick={handleZoomIn}
-                >
+                  onClick={handleZoomIn}>
                   <MdZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                 </button>
               </div>
@@ -2229,8 +2244,7 @@ export default function Editor() {
                   isIconOnly
                   className="rounded-ful bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                   size="sm"
-                  variant="bordered"
-                >
+                  variant="bordered">
                   ?
                 </Button>
               </PopoverTrigger>
@@ -2245,8 +2259,7 @@ export default function Editor() {
                     {shortcuts.map((s) => (
                       <div
                         key={s.label}
-                        className="flex justify-between items-center text-xs"
-                      >
+                        className="flex justify-between items-center text-xs">
                         <span className="text-foreground/70">{s.label}</span>
                         <span className="font-mono bg-content2 px-2 py-0.5 rounded">
                           {s.display}
@@ -2417,6 +2430,31 @@ export default function Editor() {
             </div>
           )}
       </div>
+      {/* AI GENERATE MODAL */}
+      {showAIModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
+          <div className="bg-white dark:bg-gray-900 p-5 rounded-lg w-[400px] shadow-xl">
+            <h2 className="text-lg font-bold mb-3">AI Diagram Generator</h2>
+
+            <textarea
+              className="w-full border p-2 mb-3 rounded dark:bg-gray-800"
+              placeholder="e.g. Pump → Heat Exchanger → Tank"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-3 py-1 text-gray-500"
+                onClick={() => setShowAIModal(false)}>
+                Cancel
+              </button>
+
+              <button className="bg-blue-600 text-white px-4 py-2 rounded">
+                Generate Diagram
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
