@@ -124,6 +124,50 @@ def post_component(data, files):
         return None
 
 
+def update_component(component_id, data, files=None):
+    """
+    Update an existing component.
+    PUT /api/components/<id>/
+    """
+    url = f"{app_state.BACKEND_BASE_URL}/api/components/{component_id}/"
+
+    headers = {}
+    if app_state.access_token:
+        headers["Authorization"] = f"Bearer {app_state.access_token}"
+
+    try:
+        response = requests.put(
+            url,
+            headers=headers,
+            data=data,
+            files=files,
+            timeout=DEFAULT_TIMEOUT,
+        )
+        return response
+    except Exception as e:
+        print("[API ERROR] PUT failed:", e)
+        return None
+
+
+def delete_component(component_id):
+    """
+    Delete an existing component.
+    DELETE /api/components/<id>/
+    """
+    url = f"{app_state.BACKEND_BASE_URL}/api/components/{component_id}/"
+
+    headers = {}
+    if app_state.access_token:
+        headers["Authorization"] = f"Bearer {app_state.access_token}"
+
+    try:
+        response = requests.delete(url, headers=headers, timeout=DEFAULT_TIMEOUT)
+        return response
+    except Exception as e:
+        print("[API ERROR] DELETE failed:", e)
+        return None
+
+
 def get_projects():
     """
     Fetch list of all projects

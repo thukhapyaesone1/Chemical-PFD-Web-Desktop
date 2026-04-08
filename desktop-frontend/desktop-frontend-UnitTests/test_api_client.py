@@ -9,6 +9,8 @@ from src.api_client import (
     login,
     register,
     get_components,
+    update_component,
+    delete_component,
     create_project,
     update_project,
     delete_project,
@@ -155,6 +157,40 @@ class ApiClientTests(unittest.TestCase):
         mock_delete.return_value = mock_response
 
         self.assertIsNone(delete_project(5))
+
+    @patch("src.api_client.requests.put")
+    def test_update_component_success(self, mock_put):
+        mock_response = Mock(status_code=200)
+        mock_put.return_value = mock_response
+
+        response = update_component(12, {"name": "Updated Pump"})
+
+        self.assertIsNotNone(response)
+        if response is not None:
+            self.assertEqual(response.status_code, 200)
+        mock_put.assert_called_once()
+
+    @patch("src.api_client.requests.put", side_effect=requests.RequestException("network down"))
+    def test_update_component_failure_returns_none(self, mock_put):
+        response = update_component(12, {"name": "Updated Pump"})
+        self.assertIsNone(response)
+
+    @patch("src.api_client.requests.delete")
+    def test_delete_component_success(self, mock_delete):
+        mock_response = Mock(status_code=200)
+        mock_delete.return_value = mock_response
+
+        response = delete_component(12)
+
+        self.assertIsNotNone(response)
+        if response is not None:
+            self.assertEqual(response.status_code, 200)
+        mock_delete.assert_called_once()
+
+    @patch("src.api_client.requests.delete", side_effect=requests.RequestException("network down"))
+    def test_delete_component_failure_returns_none(self, mock_delete):
+        response = delete_component(12)
+        self.assertIsNone(response)
 
 
 if __name__ == "__main__":
