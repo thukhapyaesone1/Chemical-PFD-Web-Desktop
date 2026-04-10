@@ -112,6 +112,8 @@ const resolveImageUrl = (url: string) => {
 };
 
 export default function Editor() {
+  const [aiError, setAiError] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -2317,8 +2319,8 @@ export default function Editor() {
                 <div className="text-black font-medium">Canvas Empty</div>
                 <div className="text-sm text-gray-400 mt-1">
                   Drag components from the sidebar <br />
-                  <span className="font-bold">or</span> drag and drop a .pfd
-                  file to get started.
+                  <span className="font-bold">OR Generate using AI</span> <br />
+                  or drag and drop a .pfd file to get started.
                 </div>
               </div>
             </div>
@@ -2441,6 +2443,18 @@ export default function Editor() {
               placeholder="e.g. Pump → Heat Exchanger → Tank"
             />
 
+            {aiError && (
+              <div className="text-red-500 text-sm mb-2">{aiError}</div>
+            )}
+
+            {/* EXAMPLES ADDED HERE */}
+            <div className="text-xs text-gray-500 mb-3">
+              <p className="font-semibold mb-1">Examples:</p>
+              <p>• Pump → Heat Exchanger → Tank</p>
+              <p>• Tank → Pump → Valve</p>
+              <p>• Pump → Valve → Tank</p>
+            </div>
+
             <div className="flex justify-end gap-2">
               <button
                 className="px-3 py-1 text-gray-500"
@@ -2448,8 +2462,27 @@ export default function Editor() {
                 Cancel
               </button>
 
-              <button className="bg-blue-600 text-white px-4 py-2 rounded">
-                Generate Diagram
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                disabled={isGenerating}
+                onClick={() => {
+                  setAiError(""); // clear previous error
+                  setIsGenerating(true);
+
+                  setTimeout(() => {
+                    const isSuccess = Math.random() > 0.5;
+
+                    if (!isSuccess) {
+                      setAiError("Something went wrong. Please try again.");
+                      setIsGenerating(false);
+                      return;
+                    }
+
+                    setIsGenerating(false);
+                    setShowAIModal(false);
+                  }, 2000);
+                }}>
+                {isGenerating ? "Generating..." : "Generate Diagram"}
               </button>
             </div>
           </div>
