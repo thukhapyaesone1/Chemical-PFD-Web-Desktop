@@ -1470,10 +1470,10 @@ export default function Editor() {
           setTempConnection((prev: any) =>
             prev
               ? {
-                  ...prev,
-                  currentX: pointer.x,
-                  currentY: pointer.y,
-                }
+                ...prev,
+                currentX: pointer.x,
+                currentY: pointer.y,
+              }
               : null,
           );
         }
