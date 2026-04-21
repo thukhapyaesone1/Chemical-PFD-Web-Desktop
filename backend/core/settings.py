@@ -9,7 +9,6 @@ import dj_database_url
 from datetime import timedelta
 import sys
 
-# this is the testing for the CI - 4
 
 # ===============================
 # BASE DIRECTORY
@@ -33,7 +32,7 @@ environ.Env.read_env(BASE_DIR / ".env")
 # ===============================
 # SECURITY
 # ===============================
-
+DEBUG = env("DEBUG")
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-ci-key")
 GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
 ALLOWED_HOSTS = [
@@ -126,9 +125,6 @@ WSGI_APPLICATION = "core.wsgi.application"
 # ===============================
 # DATABASE (Render PostgreSQL or Local Docker PostgreSQL)
 # ===============================
-
-DEBUG = os.environ.get("DEBUG", "False") == "True"
-
 
 # Local database (Docker)
 DATABASES = {
@@ -229,6 +225,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ===============================
 # PRODUCTION SECURITY SETTINGS
 # ===============================
+print("DEBUG VALUE:", DEBUG)
 
 if not DEBUG and 'test' not in sys.argv:
     SECURE_BROWSER_XSS_FILTER = True
